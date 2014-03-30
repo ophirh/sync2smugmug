@@ -238,7 +238,7 @@ class Album(SyncContainer):
     def update_from_smugmug(self, album):
         self.smugmug_id = album['id']
         self.album_key = album['Key']
-        if album['LastUpdated']:
+        if 'LastUpdated' in album:
             self.last_updated = datetime.strptime(album['LastUpdated'].partition(' ')[0], '%Y-%m-%d').date()
 
     def get_images(self):
