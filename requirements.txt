@@ -1,12 +1,8 @@
-MarkupSafe==0.18
-Pillow==2.3.0
-Werkzeug==0.9.4
-argparse==1.2.1
-itsdangerous==0.23
+MarkupSafe==0.19
+argparse==1.1
+dateutils==0.6.6
 python-dateutil==2.2
-pytz==2014.1.1
+pytz==2014.2
 requests==2.2.1
-requests-oauth==0.4.1
 six==1.6.1
 smugpy==0.3.1
-wsgiref==0.1.2
