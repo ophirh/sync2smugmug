@@ -120,25 +120,18 @@ class Scanner(object):
 
         self.perform_action_on_collections('Downloading', action)
 
-    def sync(self):
+    def metadata(self):
         """
         Sync changes (including deletions and renaming) between disk and online - making disk the master
         """
         def action(container):
             """ :type container: SyncContainer """
-            if container.needs_upload():
-                container.upload()
-
-            if container.needs_download():
-                container.download()
-
-            if container.needs_rename():
-                container.rename()
-
+            # TODO
             # if container.needs_metadata_sync():
             #     container.metadata_sync()
+            pass
 
-        self.perform_action_on_collections('Synchronizing', action)
+        self.perform_action_on_collections('Renaming', action)
 
     def perform_action_on_collections(self, msg, action):
         logger.info('%s collections (categories and subcategories)...' % msg)

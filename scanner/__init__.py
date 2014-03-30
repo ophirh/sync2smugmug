@@ -11,7 +11,10 @@ def scan(base_dir, nickname, action):
     if action == 'download':
         s.download()
 
-    if action == 'sync':
-        s.sync()
+    if action == 'metadata':
+        s.metadata()
 
-    # TODO: Sync meta data for album
+    if action == 'sync':
+        s.upload()
+        s.metadata()
+        s.download()
