@@ -52,7 +52,7 @@ class SyncObject(object):
         self.smugmug_id = smugmug_id
         self.disk_path = disk_path
         self.parent = None
-        self.last_updated = None
+        self.online_last_updated = None
 
     @staticmethod
     def path_to_id(prefix, path):
@@ -239,7 +239,7 @@ class Album(SyncContainer):
         self.smugmug_id = album['id']
         self.album_key = album['Key']
         if 'LastUpdated' in album:
-            self.last_updated = datetime.strptime(album['LastUpdated'].partition(' ')[0], '%Y-%m-%d').date()
+            self.online_last_updated = datetime.strptime(album['LastUpdated'].partition(' ')[0], '%Y-%m-%d').date()
 
     def get_images(self):
         return self.get_smugmug().images_get(AlbumID=self.smugmug_id,
@@ -271,6 +271,7 @@ class Album(SyncContainer):
         return False
 
     def upload(self):
+        # TODO: Need to delete existing images that need update
         if not self.on_smugmug():
             # Make the album in Smugmug (including keywords, etc...)
             logger.debug('--- Creating album for %s (parent: %s)' % (self, self.get_parent()))
@@ -278,9 +279,7 @@ class Album(SyncContainer):
             self.update_from_smugmug(r['Album'])
 
         # Get images that are already uploaded
-        images_online = {}
-        for i in self.get_images():
-            images_online[i['id']] = i
+        images_online = {i['id'] : i for i in self.get_images()}
 
         # Make sure the image is mapped properly
         for i in images_online.values():
@@ -360,9 +359,13 @@ class Image(SyncObject):
     def update_from_smugmug(self, image):
         self.smugmug_id = image['id']
         self.original_url = image['OriginalURL']
+        if 'LastUpdated' in image:
+            self.online_last_updated = datetime.strptime(image['LastUpdated'], '%Y-%m-%d %H:%M:%S')
 
     def upload(self):
-        if not self.on_smugmug():
+        # TODO: Need to delete existing images that need update
+        disk_last_updated = datetime.fromtimestamp(os.path.getmtime(self.disk_path))
+        if not self.on_smugmug() or disk_last_updated > self.online_last_updated:
             logger.debug('--- Uploading image %s' % self)
             self.get_smugmug().images_upload(File=self.disk_path, AlbumID=self.get_parent_smugmug_id())
 

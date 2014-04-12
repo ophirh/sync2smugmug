@@ -21,9 +21,50 @@ class Scanner(object):
             self.base_dir += os.path.sep
 
         self._scan_disk()
-        self._scan_smugmug_for_categories_and_albums()
+        self._scan_smugmug()
 
-    def skip(self, p):
+    def upload(self):
+        """
+        Upload all images on disk that don't exist online
+        """
+        # TODO: Deal with name changes...
+        def action(container):
+            """ :type container: SyncContainer """
+            if container.needs_upload():
+                container.upload()
+
+        self._perform_action_on_collections('Uploading', action)
+
+    def download(self):
+        """
+        Download albums (and categories) that only exist online. This will NOT download specific images - only whole
+        albums.
+        """
+        def action(container):
+            """ :type container: SyncContainer """
+            if container.needs_download():
+                container.download()
+
+        self._perform_action_on_collections('Downloading', action)
+
+    def metadata(self):
+        """
+        Sync changes (including deletions and renaming) between disk and online - making disk the master
+        """
+        def action(container):
+            """ :type container: SyncContainer """
+            # TODO
+            # if container.needs_metadata_sync():
+            #     container.metadata_sync()
+            pass
+
+        self._perform_action_on_collections('Renaming', action)
+
+    def print_status(self):
+        self._print_summary('Collections', self.collections)
+        self._print_summary('Folders', self.albums)
+
+    def _skip(self, p):
         # First, take off the base_dir, then take the base name
         local_path = p[len(self.base_dir):]
         basename = os.path.basename(local_path)
@@ -45,7 +86,7 @@ class Scanner(object):
         logger.info('Scanning disk (starting from %s)...' % self.base_dir)
         for dir_path, dirs, files in os.walk(self.base_dir):
             # Apply some base filtering...
-            if self.skip(dir_path) or (len(dirs) == 0 and len(files) == 0):
+            if self._skip(dir_path) or (len(dirs) == 0 and len(files) == 0):
                 continue
 
             album = SyncContainer.create_from_disk(self, dir_path, files)
@@ -59,7 +100,7 @@ class Scanner(object):
                 image = Image.create_from_disk(self, dir_path, img)
                 album.images[image.id] = image
 
-    def _scan_smugmug_for_categories_and_albums(self):
+    def _scan_smugmug(self):
         logger.info('Scanning SmugMug for categories... (on disk %d)' % len(self.collections))
         # First get the Hierarchy (categories and subcategories)
         categories = self.smugmug.categories_get(NickName=self.nickname)
@@ -96,44 +137,9 @@ class Scanner(object):
                 a.update_from_smugmug(album)
                 a.save_sync_data()
 
-    def upload(self):
-        """
-        Upload all images on disk that don't exist online
-        """
-        # TODO: Deal with name changes...
-        def action(container):
-            """ :type container: SyncContainer """
-            if container.needs_upload():
-                container.upload()
+            # TODO: Missing sync of images from smugmug!
 
-        self.perform_action_on_collections('Uploading', action)
-
-    def download(self):
-        """
-        Download albums (and categories) that only exist online. This will NOT download specific images - only whole
-        albums.
-        """
-        def action(container):
-            """ :type container: SyncContainer """
-            if container.needs_download():
-                container.download()
-
-        self.perform_action_on_collections('Downloading', action)
-
-    def metadata(self):
-        """
-        Sync changes (including deletions and renaming) between disk and online - making disk the master
-        """
-        def action(container):
-            """ :type container: SyncContainer """
-            # TODO
-            # if container.needs_metadata_sync():
-            #     container.metadata_sync()
-            pass
-
-        self.perform_action_on_collections('Renaming', action)
-
-    def perform_action_on_collections(self, msg, action):
+    def _perform_action_on_collections(self, msg, action):
         logger.info('%s collections (categories and subcategories)...' % msg)
         for key in sorted(self.collections.keys()):
             action(self.collections[key])
@@ -141,10 +147,6 @@ class Scanner(object):
         logger.info('%s folders (albums)...' % msg)
         for key in sorted(self.albums.keys()):
             action(self.albums[key])
-
-    def print_status(self):
-        self._print_summary('Collections', self.collections)
-        self._print_summary('Folders', self.albums)
 
     @staticmethod
     def _print_summary(title, coll):
