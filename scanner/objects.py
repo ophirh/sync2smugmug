@@ -1,11 +1,13 @@
 import os
 import json
 import logging
+import requests
 import ConfigParser
 from datetime import datetime
 from dateutil import parser
 from multiprocessing.pool import ThreadPool
-import requests
+
+from .policy import *
 import scan
 
 
@@ -26,22 +28,36 @@ def date_hook(json_dict):
     return json_dict
 
 
-def upload_image(image):
-    """ :type image: Image """
+def sync_image(image, policy):
+    """
+    :type image: Image
+    :type policy: int
+    """
     # noinspection PyBroadException
     try:
-        image.upload()
+        image.sync(policy)
+        return True
     except:
         # Report and continue
-        logging.getLogger(__name__).exception('Failed to upload image %s' % image)
+        logging.getLogger(__name__).exception('Failed to sync image %s' % image)
+        raise
 
 
-def upload_images(images):
+def sync_images(images, policy):
     """ :type images: list[Image] """
     thread_pool = ThreadPool(10)
-    thread_pool.map(upload_image, images)
+
+    results = []
+    for i in images:
+        r = thread_pool.apply_async(sync_image, (i, policy))
+        results.append(r)
+
     thread_pool.close()
     thread_pool.join()
+
+    for r in results:
+        # This will raise an exception if any was caught during processing
+        r.get()
 
 
 class SyncObject(object):
@@ -65,6 +81,7 @@ class SyncObject(object):
         return prefix + obj_id
 
     def extract_name(self):
+        """ Get the object name from its ID """
         return os.path.basename(self.id)
 
     def on_smugmug(self):
@@ -75,14 +92,6 @@ class SyncObject(object):
 
     def get_smugmug(self):
         return self.scanner.smugmug
-
-    def upload(self):
-        # Abstract method
-        pass
-
-    def download(self):
-        # Abstract method
-        pass
 
     def get_parent(self):
         if self.parent is None:
@@ -98,6 +107,14 @@ class SyncObject(object):
     def get_parent_smugmug_id(self):
         return self.get_parent().smugmug_id if self.get_parent() is not None else None
 
+    def needs_sync(self):
+        # At the minimum, this object should be on both disk and online
+        return not self.on_disk() or not self.on_smugmug()
+
+    def sync(self, policy):
+        # Abstract method
+        pass
+
     def __str__(self):
         return '%s:%s (%s)' % (self.id, self.smugmug_id, self.disk_path)
 
@@ -105,7 +122,6 @@ class SyncObject(object):
 class SyncContainer(SyncObject):
     def __init__(self, scanner, obj_id, **kwargs):
         super(SyncContainer, self).__init__(scanner, obj_id, **kwargs)
-        self.sync_data = {}
         self.picasa_ini_file = None
         self.picasa_ini = None
 
@@ -122,6 +138,10 @@ class SyncContainer(SyncObject):
         if len(images) > 0:
             # This is an album (it has images)
             folder = Album(scanner, folder_id)
+            folder.disk_path = disk_path
+            folder.load_sync_data()
+
+            # TODO: Use (parse) meta data from Picasa
             if 'Picasa.ini' in files or '.picasa.ini' in files:
                 folder.picasa_ini_file = os.path.join(disk_path,
                                                       'Picasa.ini' if 'Picasa.ini' in files else '.picasa.ini')
@@ -130,103 +150,65 @@ class SyncContainer(SyncObject):
         else:
             # This is a simple folder (does not have images)
             folder = Collection(scanner, folder_id)
-
-        folder.disk_path = disk_path
-
-        if 'smugmug_sync.json' in files:
-            with open(os.path.join(disk_path, 'smugmug_sync.json')) as f:
-                folder.sync_data = json.loads(f.read(), object_hook=date_hook)
-                folder.smugmug_id = folder.sync_data['smugmug_id']
+            folder.disk_path = disk_path
 
         return folder
 
-    def needs_upload(self):
-        # Abstract method
-        return False
-
-    def needs_download(self):
-        return self.on_smugmug() and not self.on_disk()
-
-    def needs_rename(self):
-        # Abstract method
-        return False
-
-    def download(self):
-        # Simply make the directory
-        self.disk_path = SyncObject.id_to_path(self.scanner.base_dir, self.id)
-        if not os.path.exists(self.disk_path):
-            os.mkdir(self.disk_path)
-
-    def rename(self):
-        pass
+    def sync(self, policy):
+        if policy == POLICY_SYNC:
+            # Simply make the directory
+            self.disk_path = SyncObject.id_to_path(self.scanner.base_dir, self.id)
+            if not os.path.exists(self.disk_path):
+                os.mkdir(self.disk_path)
 
     def is_managed_by_picasa(self):
         return self.picasa_ini is not None
 
-    def save_sync_data(self):
-        self.sync_data['smugmug_id'] = self.smugmug_id
-        with open(os.path.join(self.disk_path, 'smugmug_sync.json'), 'w+') as f:
-            f.write(json.dumps(self.sync_data, default=date_handler))
-
 
 class Collection(SyncContainer):
     @staticmethod
-    def create_from_smugmug(scanner, folder_id, props):
+    def create_from_smugmug(scanner, folder_id, category):
         """ :type scanner: scan.Scanner """
         coll = Collection(scanner, folder_id)
-        coll.update_from_smugmug(props)
+        coll.update_from_smugmug(category)
         return coll
 
-    def update_from_smugmug(self, props):
-        self.smugmug_id = props['id']
+    def update_from_smugmug(self, category):
+        self.smugmug_id = category['id']
 
     def is_smugmug_category(self):
         # It is a category (vs. subcategory) if it is a top level item
         return self.get_parent() is None
 
-    def needs_upload(self):
-        return self.on_disk() and not self.on_smugmug()
+    def needs_sync(self):
+        return super(Collection, self).needs_sync()
 
-    def upload(self):
-        # Make the folder in Smugmug (including keywords, etc...)
-        if self.is_smugmug_category():
-            logger.debug('--- Creating category for %s' % self)
-            r = self.get_smugmug().categories_create(Name=self.extract_name())
-            self.smugmug_id = r['Category']['id']
+    def sync(self, policy):
+        super(Collection, self).sync(policy)
+
+        if not self.on_smugmug():
+            # Upload: Make the folder in Smugmug (including keywords, etc...)
+            if self.is_smugmug_category():
+                logger.debug('--- Creating category for %s' % self)
+                r = self.get_smugmug().categories_create(Name=self.extract_name())
+                self.smugmug_id = r['Category']['id']
+            else:
+                logger.debug('--- Creating subcategory for %s' % self)
+                r = self.get_smugmug().subcategories_create(Name=self.extract_name(),
+                                                            CategoryID=self.get_parent_smugmug_id())
+                self.smugmug_id = r['SubCategory']['id']
         else:
-            logger.debug('--- Creating subcategory for %s' % self)
-            r = self.get_smugmug().subcategories_create(Name=self.extract_name(),
-                                                        CategoryID=self.get_parent_smugmug_id())
-            self.smugmug_id = r['SubCategory']['id']
-
-    def needs_rename(self):
-        # online_name = self.get_smugmug().categories_get(NickName=self.nickname)
-        #
-        # if self.is_smugmug_category():
-        #     logger.debug('--- Creating category for %s' % self)
-        #     r = self.get_smugmug().categories_create(Name=self.extract_name())
-        #     self.smugmug_id = r['Category']['id']
-        # else:
-        #     logger.debug('--- Creating subcategory for %s' % self)
-        #     r = self.get_smugmug().subcategories_create(Name=self.extract_name(),
-        #                                                 CategoryID=self.get_parent_smugmug_id())
-        #     self.smugmug_id = r['SubCategory']['id']
-        #
-        #
-        # online_name = self.get_smugmug().ca
-        # if self.smugmug_id and
-        return False
-
-    def rename(self):
-        # TODO
-        pass
+            # Download: Super implementation will create the directory
+            pass
 
 
 class Album(SyncContainer):
     def __init__(self, scanner, obj_id, **kwargs):
         super(Album, self).__init__(scanner, obj_id, **kwargs)
         self.album_key = None
+        self.sync_data = {}
         self.images = {}
+        """ :type : dict[str, Image] """
 
     @staticmethod
     def create_from_smugmug(scanner, folder_id, album):
@@ -235,112 +217,111 @@ class Album(SyncContainer):
         a.update_from_smugmug(album)
         return a
 
+    @staticmethod
+    def make_album_id(smugmug_album):
+        """
+        :type smugmug_album: dict
+        :rtype str
+        """
+        collection_id = os.path.join(smugmug_album['Category']['Name'], smugmug_album['SubCategory']['Name']) \
+            if 'SubCategory' in smugmug_album else smugmug_album['Category']['Name']
+
+        return os.path.join(collection_id, smugmug_album['Title'])
+
     def update_from_smugmug(self, album):
         self.smugmug_id = album['id']
         self.album_key = album['Key']
         if 'LastUpdated' in album:
             self.online_last_updated = datetime.strptime(album['LastUpdated'].partition(' ')[0], '%Y-%m-%d').date()
 
-    def get_images(self):
+    def get_images(self, heavy=True):
         return self.get_smugmug().images_get(AlbumID=self.smugmug_id,
                                              AlbumKey=self.album_key,
-                                             Heavy=True)['Album']['Images']
+                                             Heavy=heavy)['Album']['Images']
+
+    def images_need_sync(self):
+        if self.sync_data and 'images_uploaded_date' in self.sync_data:
+            upload_date = parser.parse(self.sync_data['images_uploaded_date'])
+            disk_last_updated = datetime.fromtimestamp(os.path.getmtime(self.disk_path))
+            if disk_last_updated <= upload_date:
+                return False
+
+        return True
 
     def mark_finished(self):
-        self.sync_data['images_uploaded'] = True
         self.sync_data['images_uploaded_date'] = str(datetime.utcnow())
         self.save_sync_data()
 
-    def needs_upload(self):
+    def needs_sync(self):
+        """
+        In case of album, we will use the sync_data to try and optimize the album creation. If the album's last
+        update date has not changed, we will not even check for images.
+        """
+        return super(Album, self).needs_sync() or self.images_need_sync()
+
+    def sync(self, policy):
+        # This will make sure we have a folder on disk for this album
+        super(Album, self).sync(policy)
         if not self.on_disk():
-            return False
+            return
 
-        if not self.on_smugmug():
-            return True
-
-        if self.sync_data and 'images_uploaded' not in self.sync_data:
-            return True
-
-        if 'images_uploaded_date' in self.sync_data:
-            upload_date = parser.parse(self.sync_data['images_uploaded_date'])
-            disk_last_updated = datetime.fromtimestamp(os.path.getmtime(self.disk_path))
-            # If disk is newer by at least one day than online - flag for sync
-            if disk_last_updated > upload_date:
-                return True
-
-        return False
-
-    def upload(self):
-        # TODO: Need to delete existing images that need update
         if not self.on_smugmug():
             # Make the album in Smugmug (including keywords, etc...)
             logger.debug('--- Creating album for %s (parent: %s)' % (self, self.get_parent()))
             r = self.get_smugmug().albums_create(Title=self.extract_name(), CategoryID=self.get_parent_smugmug_id())
             self.update_from_smugmug(r['Album'])
 
-        # Get images that are already uploaded
-        images_online = {i['id'] : i for i in self.get_images()}
+        # Check for images...
+        if self.images_need_sync():
+            # Sync images with their online versions
+            for i in self.get_images():
+                image_id = os.path.join(self.id, i['FileName'])
+                if image_id not in self.images:
+                    # Add this image to the index
+                    self.images[image_id] = Image.create_from_smugmug(self.scanner, image_id, i)
+                else:
+                    # Simply update the smugmug ID
+                    self.images[image_id].update_from_smugmug(i)
 
-        # Make sure the image is mapped properly
-        for i in images_online.values():
-            image_id = os.path.join(self.id, i['FileName'])
-            if image_id not in self.images:
-                # Add this image to the index
-                self.images[image_id] = Image.create_from_smugmug(self.scanner, image_id, i)
-            else:
-                # Simply update the smugmug ID
-                self.images[image_id].update_from_smugmug(i)
+            tasks = []
+            for image in self.images.values():
+                if image.needs_sync():
+                    tasks.append(image)
 
-        # Find all images on disk that we need to upload
-        tasks = []
-        for image in self.images.values():
-            if image.smugmug_id is not None and image.smugmug_id in images_online.keys():
-                continue
+            # Upload concurrently
+            sync_images(tasks, policy)
 
-            tasks.append(image)
+            # Done - double check that indeed we have the same number of images online...
+            if len(self.get_images(heavy=False)) == len(self.images):
+                self.mark_finished()
+                logger.info('Finished uploading images for %s' % self)
 
-        # Upload concurrently
-        upload_images(tasks)
+    def save_sync_data(self):
+        self.sync_data['smugmug_id'] = self.smugmug_id
+        with open(os.path.join(self.disk_path, 'smugmug_sync.json'), 'w+') as f:
+            f.write(json.dumps(self.sync_data, default=date_handler))
 
-        # Done - double check that indeed we have the same number of images online...
-        if len(self.get_images()) == len(self.images):
-            self.mark_finished()
-            logger.info('Finished uploading images for %s' % self)
+    def load_sync_data(self):
+        p = os.path.join(self.disk_path, 'smugmug_sync.json')
+        if os.path.exists(p):
+            with open(p) as f:
+                self.sync_data = json.loads(f.read(), object_hook=date_hook)
+                self.smugmug_id = self.sync_data['smugmug_id']
 
-    def needs_download(self):
-        if not super(Album, self).needs_download():
-            return False
-
-        # Add a check for photos to the default check
-        u = len(self.get_images())
-        return u > 0
-
-    def download(self):
-        # Download actual photos...
-        super(Album, self).download()
-
-        for i in self.get_images():
-            image_id = os.path.join(self.id, i['FileName'])
-            image = Image.create_from_smugmug(self.scanner, image_id, i)
-            self.images[image_id] = image
-
-            image.download()
-
-        self.mark_finished()
-
-    def needs_rename(self):
-        # TODO
-        return False
-
-    def rename(self):
-        # TODO
-        pass
+    def delete_sync_data(self):
+        if self.disk_path is not None:
+            logger.debug('--- Deleting sync data for album %s' % self.id)
+            p = os.path.join(self.disk_path, 'smugmug_sync.json')
+            if os.path.exists(p):
+                os.remove(p)
+            self.sync_data = {}
 
 
 class Image(SyncObject):
     def __init__(self, scanner, obj_id, smugmug_id=None, disk_path=None):
         super(Image, self).__init__(scanner, obj_id, smugmug_id, disk_path)
         self.original_url = None
+        self.duplicated_images = []
 
     @staticmethod
     def create_from_disk(scanner, folder, name):
@@ -357,15 +338,56 @@ class Image(SyncObject):
         return i
 
     def update_from_smugmug(self, image):
-        self.smugmug_id = image['id']
-        self.original_url = image['OriginalURL']
-        if 'LastUpdated' in image:
-            self.online_last_updated = datetime.strptime(image['LastUpdated'], '%Y-%m-%d %H:%M:%S')
+        last_update = datetime.strptime(image['LastUpdated'], '%Y-%m-%d %H:%M:%S')
+        if self.smugmug_id is None:
+            self.smugmug_id = image['id']
+            self.original_url = image['OriginalURL']
+            self.online_last_updated = last_update
+        else:
+            # Duplicated image on SmugMug!!! Delete older version
+            self.duplicated_images.append(image['id'])
+            logger.info('Duplicated image on SmugMug!!! Delete older version %s' % self.id)
+
+    def needs_sync(self):
+        # Check for upload, download, delete
+        return not self.on_smugmug() or not self.on_disk() or len(self.duplicated_images) > 0
+
+    def sync(self, policy):
+        if not self.on_smugmug():
+            self.upload()
+
+        if not self.on_disk():
+            if policy == POLICY_DISK_RULES:
+                # Delete the online version (as this was deleted from the disk)
+                logger.debug('--- Deleting image %d' % self.smugmug_id)
+                self.get_smugmug().images_delete(ImageID=self.smugmug_id)
+                self.smugmug_id = None
+            else:
+                # Download the file to disk
+                self.download()
+
+        if len(self.duplicated_images) > 0:
+            # Delete from online any duplicates of this photo (duplicates are identified by file name)
+            for smugmug_id in self.duplicated_images:
+                logger.debug('--- Deleting duplicated image %d' % smugmug_id)
+                self.get_smugmug().images_delete(ImageID=smugmug_id)
+
+            self.duplicated_images = []
 
     def upload(self):
-        # TODO: Need to delete existing images that need update
-        disk_last_updated = datetime.fromtimestamp(os.path.getmtime(self.disk_path))
-        if not self.on_smugmug() or disk_last_updated > self.online_last_updated:
+        upload = True
+
+        if self.online_last_updated:
+            disk_last_updated = datetime.fromtimestamp(os.path.getmtime(self.disk_path))
+            upload = disk_last_updated > self.online_last_updated
+
+        if upload:
+            # Need to delete existing images that need update
+            if self.on_smugmug():
+                logger.debug('--- Deleting image (for replacement) %s' % self.id)
+                self.get_smugmug().images_delete(ImageID=self.smugmug_id)
+                self.smugmug_id = None
+
             logger.debug('--- Uploading image %s' % self)
             self.get_smugmug().images_upload(File=self.disk_path, AlbumID=self.get_parent_smugmug_id())
 

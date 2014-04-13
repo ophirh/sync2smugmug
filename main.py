@@ -24,13 +24,13 @@ def main():
     arg_parser = ArgumentParser(version='Picasa2Smugmug 0.1')
     arg_parser.add_argument('--path', required=True, help='Directory to start scanning from')
     arg_parser.add_argument('--nickname', required=True, help='Nickname of SmugMug account')
-    arg_parser.add_argument('--action',
-                            choices=['download', 'upload', 'sync'],
-                            default='upload',
-                            help='Action to perform')
+    # arg_parser.add_argument('--action',
+    #                         choices=['download', 'upload', 'sync'],
+    #                         default='upload',
+    #                         help='Action to perform')
     args = vars(arg_parser.parse_args())
 
-    scan(base_dir=args['path'], nickname=args['nickname'], action=args['action'])
+    scan(base_dir=args['path'], nickname=args['nickname'], reset=False)
 
 
 if __name__ == '__main__': main()

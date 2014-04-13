@@ -1,7 +1,8 @@
 import logging
 import os
 from .smugmug import MySmugMug
-from .objects import Album, Image, Collection, SyncContainer
+from .objects import SyncContainer, Album, Image, Collection
+from .policy import *
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ class Scanner(object):
     """ :type : dict[str, Collection] """
     smugmug = MySmugMug()
 
-    def __init__(self, base_dir, nickname):
+    def __init__(self, base_dir, nickname, reset_cache=False):
         self.base_dir = base_dir
         self.nickname = nickname
 
@@ -21,72 +22,30 @@ class Scanner(object):
             self.base_dir += os.path.sep
 
         self._scan_disk()
-        self._scan_smugmug()
+        self._scan_smugmug(reset_cache)
 
-    def upload(self):
-        """
-        Upload all images on disk that don't exist online
-        """
-        # TODO: Deal with name changes...
-        def action(container):
-            """ :type container: SyncContainer """
-            if container.needs_upload():
-                container.upload()
+    def sync(self, policy=POLICY_SYNC):
+        logger.info('Synchronizing categories and subcategories...')
+        for key in sorted(self.collections.keys()):
+            collection = self.collections[key]
+            if collection.needs_sync():
+                collection.sync(policy)
 
-        self._perform_action_on_collections('Uploading', action)
-
-    def download(self):
-        """
-        Download albums (and categories) that only exist online. This will NOT download specific images - only whole
-        albums.
-        """
-        def action(container):
-            """ :type container: SyncContainer """
-            if container.needs_download():
-                container.download()
-
-        self._perform_action_on_collections('Downloading', action)
-
-    def metadata(self):
-        """
-        Sync changes (including deletions and renaming) between disk and online - making disk the master
-        """
-        def action(container):
-            """ :type container: SyncContainer """
-            # TODO
-            # if container.needs_metadata_sync():
-            #     container.metadata_sync()
-            pass
-
-        self._perform_action_on_collections('Renaming', action)
+        logger.info('Synchronizing albums...')
+        for key in sorted(self.albums.keys()):
+            album = self.albums[key]
+            if album.needs_sync():
+                album.sync(policy)
 
     def print_status(self):
         self._print_summary('Collections', self.collections)
         self._print_summary('Folders', self.albums)
 
-    def _skip(self, p):
-        # First, take off the base_dir, then take the base name
-        local_path = p[len(self.base_dir):]
-        basename = os.path.basename(local_path)
-        return basename.startswith('.') or basename in ['Originals', 'Lightroom', '']
-
-    @staticmethod
-    def _make_album_id(smugmug_album):
-        """
-        Returns album id, album key, smugmug id, last update
-        :type smugmug_album: dict
-        :rtype str
-        """
-        collection_id = os.path.join(smugmug_album['Category']['Name'], smugmug_album['SubCategory']['Name']) \
-            if 'SubCategory' in smugmug_album else smugmug_album['Category']['Name']
-
-        return os.path.join(collection_id, smugmug_album['Title'])
-
     def _scan_disk(self):
         logger.info('Scanning disk (starting from %s)...' % self.base_dir)
         for dir_path, dirs, files in os.walk(self.base_dir):
             # Apply some base filtering...
-            if self._skip(dir_path) or (len(dirs) == 0 and len(files) == 0):
+            if self._should_skip_directory(dir_path) or (len(dirs) == 0 and len(files) == 0):
                 continue
 
             album = SyncContainer.create_from_disk(self, dir_path, files)
@@ -95,13 +54,19 @@ class Scanner(object):
             else:
                 self.collections[album.id] = album
 
-            # Scan images!
+            # Scan images on disk!
             for img in [f for f in files if Image.is_image(f)]:
                 image = Image.create_from_disk(self, dir_path, img)
                 album.images[image.id] = image
 
-    def _scan_smugmug(self):
-        logger.info('Scanning SmugMug for categories... (on disk %d)' % len(self.collections))
+    def _should_skip_directory(self, p):
+        # First, take off the base_dir, then take the base name
+        local_path = p[len(self.base_dir):]
+        basename = os.path.basename(local_path)
+        return basename.startswith('.') or basename in ['Originals', 'Lightroom', '']
+
+    def _scan_smugmug(self, reset_cache):
+        logger.info('Scanning SmugMug for categories...')
         # First get the Hierarchy (categories and subcategories)
         categories = self.smugmug.categories_get(NickName=self.nickname)
         for category in categories['Categories']:
@@ -123,11 +88,12 @@ class Scanner(object):
                 else:
                     self.collections[subcategory_id].update_from_smugmug(subcategory)
 
-        logger.info('Scanning SmugMug for albums... (on disk %d)' % len(self.albums))
+        logger.info('Scanning SmugMug for albums...')
+        albums_to_cleanup = dict(self.albums)
         albums = self.smugmug.albums_get(NickName=self.nickname, Heavy=True)
         for album in albums['Albums']:
             # Lookup the collection to make up the album id
-            album_id = self._make_album_id(album)
+            album_id = Album.make_album_id(album)
 
             # Now lookup the folder and update the smugmug id
             if album_id not in self.albums:
@@ -135,18 +101,17 @@ class Scanner(object):
             else:
                 a = self.albums[album_id]
                 a.update_from_smugmug(album)
-                a.save_sync_data()
 
-            # TODO: Missing sync of images from smugmug!
+            if album_id in albums_to_cleanup:
+                del albums_to_cleanup[album_id]
 
-    def _perform_action_on_collections(self, msg, action):
-        logger.info('%s collections (categories and subcategories)...' % msg)
-        for key in sorted(self.collections.keys()):
-            action(self.collections[key])
+            if reset_cache:
+                self.albums[album_id].delete_sync_data()
 
-        logger.info('%s folders (albums)...' % msg)
-        for key in sorted(self.albums.keys()):
-            action(self.albums[key])
+        # In albums_to_cleanup there are all the albums that might have an inaccurate sync_data
+        for album in albums_to_cleanup.values():
+            album.delete_sync_data()
+            album.smugmug_id = None
 
     @staticmethod
     def _print_summary(title, coll):
