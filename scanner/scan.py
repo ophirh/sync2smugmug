@@ -1,7 +1,7 @@
 import logging
 import os
 from .smugmug import MySmugMug
-from .objects import SyncContainer, Album, Image, Collection
+from .objects import Album, Image, Collection
 from .policy import *
 
 logger = logging.getLogger(__name__)
@@ -48,16 +48,14 @@ class Scanner(object):
             if self._should_skip_directory(dir_path) or (len(dirs) == 0 and len(files) == 0):
                 continue
 
-            album = SyncContainer.create_from_disk(self, dir_path, files)
-            if type(album) is Album:
+            images = [img for img in files if Image.is_image(img)]
+            if len(images) > 0:
+                album = Album.create_from_disk(self, dir_path, files, images)
                 self.albums[album.id] = album
-            else:
-                self.collections[album.id] = album
+            elif len(dirs) > 0:
+                collection = Collection.create_from_disk(self, dir_path)
+                self.collections[collection.id] = collection
 
-            # Scan images on disk!
-            for img in [f for f in files if Image.is_image(f)]:
-                image = Image.create_from_disk(self, dir_path, img)
-                album.images[image.id] = image
 
     def _should_skip_directory(self, p):
         # First, take off the base_dir, then take the base name

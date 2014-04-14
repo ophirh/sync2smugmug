@@ -3,29 +3,15 @@ import json
 import logging
 import requests
 import ConfigParser
+import scan
 from datetime import datetime
 from dateutil import parser
 from multiprocessing.pool import ThreadPool
-
 from .policy import *
-import scan
+from .utils import date_handler, date_hook
 
 
 logger = logging.getLogger(__name__)
-
-
-def date_handler(obj):
-    return obj.isoformat() if hasattr(obj, 'isoformat') else obj
-
-
-def date_hook(json_dict):
-    for (key, value) in json_dict.items():
-        # noinspection PyBroadException
-        try:
-            json_dict[key] = datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S")
-        except:
-            pass
-    return json_dict
 
 
 def sync_image(image, policy):
@@ -44,7 +30,11 @@ def sync_image(image, policy):
 
 
 def sync_images(images, policy):
-    """ :type images: list[Image] """
+    """
+    Perform an image sync in parallel (multi-threaded) since download and upload images might take time to complete
+    :type images: list[Image]
+    :type policy: int
+    """
     thread_pool = ThreadPool(10)
 
     results = []
@@ -119,53 +109,18 @@ class SyncObject(object):
         return '%s:%s (%s)' % (self.id, self.smugmug_id, self.disk_path)
 
 
-class SyncContainer(SyncObject):
-    def __init__(self, scanner, obj_id, **kwargs):
-        super(SyncContainer, self).__init__(scanner, obj_id, **kwargs)
-        self.picasa_ini_file = None
-        self.picasa_ini = None
-
+class Collection(SyncObject):
     @staticmethod
-    def create_from_disk(scanner, disk_path, files):
+    def create_from_disk(scanner, disk_path):
         """
         :type scanner: scan.Scanner
         :type disk_path: str
-        :type files: list[str]
         """
-        folder_id = SyncObject.path_to_id(scanner.base_dir, disk_path)
+        collection = Collection(scanner, SyncObject.path_to_id(scanner.base_dir, disk_path))
+        collection.disk_path = disk_path
 
-        images = [f for f in files if Image.is_image(f)]
-        if len(images) > 0:
-            # This is an album (it has images)
-            folder = Album(scanner, folder_id)
-            folder.disk_path = disk_path
-            folder.load_sync_data()
+        return collection
 
-            # TODO: Use (parse) meta data from Picasa
-            if 'Picasa.ini' in files or '.picasa.ini' in files:
-                folder.picasa_ini_file = os.path.join(disk_path,
-                                                      'Picasa.ini' if 'Picasa.ini' in files else '.picasa.ini')
-                folder.picasa_ini = ConfigParser.ConfigParser()
-                folder.picasa_ini.read(folder.picasa_ini_file)
-        else:
-            # This is a simple folder (does not have images)
-            folder = Collection(scanner, folder_id)
-            folder.disk_path = disk_path
-
-        return folder
-
-    def sync(self, policy):
-        if policy == POLICY_SYNC:
-            # Simply make the directory
-            self.disk_path = SyncObject.id_to_path(self.scanner.base_dir, self.id)
-            if not os.path.exists(self.disk_path):
-                os.mkdir(self.disk_path)
-
-    def is_managed_by_picasa(self):
-        return self.picasa_ini is not None
-
-
-class Collection(SyncContainer):
     @staticmethod
     def create_from_smugmug(scanner, folder_id, category):
         """ :type scanner: scan.Scanner """
@@ -184,7 +139,11 @@ class Collection(SyncContainer):
         return super(Collection, self).needs_sync()
 
     def sync(self, policy):
-        super(Collection, self).sync(policy)
+        if policy == POLICY_SYNC:
+            # Simply make the directory
+            self.disk_path = SyncObject.id_to_path(self.scanner.base_dir, self.id)
+            if not os.path.exists(self.disk_path):
+                os.mkdir(self.disk_path)
 
         if not self.on_smugmug():
             # Upload: Make the folder in Smugmug (including keywords, etc...)
@@ -202,13 +161,40 @@ class Collection(SyncContainer):
             pass
 
 
-class Album(SyncContainer):
+class Album(SyncObject):
     def __init__(self, scanner, obj_id, **kwargs):
         super(Album, self).__init__(scanner, obj_id, **kwargs)
         self.album_key = None
         self.sync_data = {}
         self.images = {}
         """ :type : dict[str, Image] """
+        self.picasa_ini = None
+        """ :type : ConfigParser.ConfigParser """
+
+    @staticmethod
+    def create_from_disk(scanner, disk_path, files, images):
+        """
+        :type scanner: scan.Scanner
+        :type disk_path: str
+        :type files: list[str]
+        :type images: list[str]
+        """
+        album = Album(scanner, SyncObject.path_to_id(scanner.base_dir, disk_path))
+        album.disk_path = disk_path
+        album.load_sync_data()
+
+        if 'Picasa.ini' in files or '.picasa.ini' in files:
+            picasa_ini_file = os.path.join(disk_path, 'Picasa.ini' if 'Picasa.ini' in files else '.picasa.ini')
+            album.picasa_ini = ConfigParser.ConfigParser()
+            album.picasa_ini.read(picasa_ini_file)
+
+        # Scan images on disk and associate with the album
+        # TODO: Use (parse) meta data from Picasa and add keywords to images
+        for img in images:
+            image = Image.create_from_disk(scanner, disk_path, img)
+            album.images[image.id] = image
+
+        return album
 
     @staticmethod
     def create_from_smugmug(scanner, folder_id, album):
@@ -227,6 +213,9 @@ class Album(SyncContainer):
             if 'SubCategory' in smugmug_album else smugmug_album['Category']['Name']
 
         return os.path.join(collection_id, smugmug_album['Title'])
+
+    def is_managed_by_picasa(self):
+        return self.picasa_ini is not None
 
     def update_from_smugmug(self, album):
         self.smugmug_id = album['id']
@@ -261,7 +250,12 @@ class Album(SyncContainer):
 
     def sync(self, policy):
         # This will make sure we have a folder on disk for this album
-        super(Album, self).sync(policy)
+        if policy == POLICY_SYNC:
+            # Simply make the directory
+            self.disk_path = SyncObject.id_to_path(self.scanner.base_dir, self.id)
+            if not os.path.exists(self.disk_path):
+                os.mkdir(self.disk_path)
+
         if not self.on_disk():
             return
 
@@ -270,6 +264,7 @@ class Album(SyncContainer):
             logger.debug('--- Creating album for %s (parent: %s)' % (self, self.get_parent()))
             r = self.get_smugmug().albums_create(Title=self.extract_name(), CategoryID=self.get_parent_smugmug_id())
             self.update_from_smugmug(r['Album'])
+            # TODO: Add keywords (and location?) from the Picasa.ini metadata
 
         # Check for images...
         if self.images_need_sync():
@@ -350,7 +345,7 @@ class Image(SyncObject):
 
     def needs_sync(self):
         # Check for upload, download, delete
-        return not self.on_smugmug() or not self.on_disk() or len(self.duplicated_images) > 0
+        return super(Image, self).needs_sync() or len(self.duplicated_images) > 0
 
     def sync(self, policy):
         if not self.on_smugmug():
@@ -377,6 +372,7 @@ class Image(SyncObject):
     def upload(self):
         upload = True
 
+        # Check if an upload is needed...
         if self.online_last_updated:
             disk_last_updated = datetime.fromtimestamp(os.path.getmtime(self.disk_path))
             upload = disk_last_updated > self.online_last_updated
