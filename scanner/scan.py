@@ -56,7 +56,6 @@ class Scanner(object):
                 collection = Collection.create_from_disk(self, dir_path)
                 self.collections[collection.id] = collection
 
-
     def _should_skip_directory(self, p):
         # First, take off the base_dir, then take the base name
         local_path = p[len(self.base_dir):]

@@ -168,8 +168,10 @@ class Album(SyncObject):
         self.sync_data = {}
         self.images = {}
         """ :type : dict[str, Image] """
-        self.picasa_ini = None
-        """ :type : ConfigParser.ConfigParser """
+        self.metadata_last_updated = None
+        self.smugmug_description = None
+        self.picasa_description = None
+        self.picasa_location = None
 
     @staticmethod
     def create_from_disk(scanner, disk_path, files, images):
@@ -185,11 +187,20 @@ class Album(SyncObject):
 
         if 'Picasa.ini' in files or '.picasa.ini' in files:
             picasa_ini_file = os.path.join(disk_path, 'Picasa.ini' if 'Picasa.ini' in files else '.picasa.ini')
-            album.picasa_ini = ConfigParser.ConfigParser()
-            album.picasa_ini.read(picasa_ini_file)
+            picasa_ini = ConfigParser.ConfigParser()
+            picasa_ini.read(picasa_ini_file)
+            # Get the picasa description and location of this album
+            try:
+                album.picasa_description = picasa_ini.get('Picasa', 'Description')
+            except ConfigParser.NoOptionError:
+                album.picasa_description = None
+
+            try:
+                album.picasa_location = picasa_ini.get('Picasa', 'Location')
+            except ConfigParser.NoOptionError:
+                album.picasa_location = None
 
         # Scan images on disk and associate with the album
-        # TODO: Use (parse) meta data from Picasa and add keywords to images
         for img in images:
             image = Image.create_from_disk(scanner, disk_path, img)
             album.images[image.id] = image
@@ -214,19 +225,20 @@ class Album(SyncObject):
 
         return os.path.join(collection_id, smugmug_album['Title'])
 
-    def is_managed_by_picasa(self):
-        return self.picasa_ini is not None
-
     def update_from_smugmug(self, album):
         self.smugmug_id = album['id']
         self.album_key = album['Key']
         if 'LastUpdated' in album:
             self.online_last_updated = datetime.strptime(album['LastUpdated'].partition(' ')[0], '%Y-%m-%d').date()
+        self.smugmug_description = album['Description']
 
     def get_images(self, heavy=True):
         return self.get_smugmug().images_get(AlbumID=self.smugmug_id,
                                              AlbumKey=self.album_key,
                                              Heavy=heavy)['Album']['Images']
+
+    def description_needs_sync(self):
+        return self.picasa_description and self.picasa_description != self.smugmug_description
 
     def images_need_sync(self):
         if self.sync_data and 'images_uploaded_date' in self.sync_data:
@@ -245,8 +257,10 @@ class Album(SyncObject):
         """
         In case of album, we will use the sync_data to try and optimize the album creation. If the album's last
         update date has not changed, we will not even check for images.
+
+        TODO - check changes of Picasa.ini file (description, location)
         """
-        return super(Album, self).needs_sync() or self.images_need_sync()
+        return super(Album, self).needs_sync() or self.images_need_sync() or self.description_needs_sync()
 
     def sync(self, policy):
         # This will make sure we have a folder on disk for this album
@@ -262,9 +276,16 @@ class Album(SyncObject):
         if not self.on_smugmug():
             # Make the album in Smugmug (including keywords, etc...)
             logger.debug('--- Creating album for %s (parent: %s)' % (self, self.get_parent()))
-            r = self.get_smugmug().albums_create(Title=self.extract_name(), CategoryID=self.get_parent_smugmug_id())
+            r = self.get_smugmug().albums_create(Title=self.extract_name(),
+                                                 CategoryID=self.get_parent_smugmug_id(),
+                                                 Description=self.picasa_description)
             self.update_from_smugmug(r['Album'])
             # TODO: Add keywords (and location?) from the Picasa.ini metadata
+
+        if self.description_needs_sync():
+            # Update the album's description property
+            logger.debug('--- Updating album\'s description %s (parent: %s)' % (self, self.get_parent()))
+            self.get_smugmug().albums_changeSettings(AlbumID=self.smugmug_id, Description=self.picasa_description)
 
         # Check for images...
         if self.images_need_sync():

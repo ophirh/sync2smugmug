@@ -12,7 +12,8 @@ class MySmugMug(SmugMug):
     def __init__(self, **kwargs):
         super(MySmugMug, self).__init__(kwargs)
 
-        self.access_key_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../data', 'accesskey.txt')
+        self.access_key_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../data',
+                                                 'accesskey.txt')
 
         # Restore previously obtained access key
         if os.path.exists(self.access_key_file_path):
