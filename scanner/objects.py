@@ -237,8 +237,19 @@ class Album(SyncObject):
                                              AlbumKey=self.album_key,
                                              Heavy=heavy)['Album']['Images']
 
+    def get_description(self):
+        if self.picasa_description and self.picasa_location:
+            return '%s\n%s' % (self.picasa_description, self.picasa_location)
+        elif self.picasa_description:
+            return self.picasa_description
+        elif self.picasa_location:
+            return self.picasa_location
+        else:
+            return None
+
     def description_needs_sync(self):
-        return self.picasa_description and self.picasa_description != self.smugmug_description
+        desc = self.get_description()
+        return desc and desc != self.smugmug_description
 
     def images_need_sync(self):
         if self.sync_data and 'images_uploaded_date' in self.sync_data:
@@ -285,7 +296,7 @@ class Album(SyncObject):
         if self.description_needs_sync():
             # Update the album's description property
             logger.debug('--- Updating album\'s description %s (parent: %s)' % (self, self.get_parent()))
-            self.get_smugmug().albums_changeSettings(AlbumID=self.smugmug_id, Description=self.picasa_description)
+            self.get_smugmug().albums_changeSettings(AlbumID=self.smugmug_id, Description=self.get_description())
 
         # Check for images...
         if self.images_need_sync():
