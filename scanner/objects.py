@@ -1,13 +1,14 @@
+from HTMLParser import HTMLParser
 import os
 import json
 import logging
 import requests
-import ConfigParser
 import scan
 from datetime import datetime
 from dateutil import parser
 from multiprocessing.pool import ThreadPool
 from .policy import *
+from scanner.picasa import Picasa
 from .utils import date_handler, date_hook
 
 
@@ -170,8 +171,7 @@ class Album(SyncObject):
         """ :type : dict[str, Image] """
         self.metadata_last_updated = None
         self.smugmug_description = None
-        self.picasa_description = None
-        self.picasa_location = None
+        self.picasa = None
 
     @staticmethod
     def create_from_disk(scanner, disk_path, files, images):
@@ -184,25 +184,11 @@ class Album(SyncObject):
         album = Album(scanner, SyncObject.path_to_id(scanner.base_dir, disk_path))
         album.disk_path = disk_path
         album.load_sync_data()
-
-        if 'Picasa.ini' in files or '.picasa.ini' in files:
-            picasa_ini_file = os.path.join(disk_path, 'Picasa.ini' if 'Picasa.ini' in files else '.picasa.ini')
-            picasa_ini = ConfigParser.ConfigParser()
-            picasa_ini.read(picasa_ini_file)
-            # Get the picasa description and location of this album
-            try:
-                album.picasa_description = picasa_ini.get('Picasa', 'Description')
-            except ConfigParser.NoOptionError:
-                album.picasa_description = None
-
-            try:
-                album.picasa_location = picasa_ini.get('Picasa', 'Location')
-            except ConfigParser.NoOptionError:
-                album.picasa_location = None
+        album.picasa = Picasa(disk_path, files)
 
         # Scan images on disk and associate with the album
         for img in images:
-            image = Image.create_from_disk(scanner, disk_path, img)
+            image = Image.create_from_disk(scanner, disk_path, img, album.picasa)
             album.images[image.id] = image
 
         return album
@@ -230,7 +216,7 @@ class Album(SyncObject):
         self.album_key = album['Key']
         if 'LastUpdated' in album:
             self.online_last_updated = datetime.strptime(album['LastUpdated'].partition(' ')[0], '%Y-%m-%d').date()
-        self.smugmug_description = album['Description']
+        self.smugmug_description = HTMLParser().unescape(album['Description'])
 
     def get_images(self, heavy=True):
         return self.get_smugmug().images_get(AlbumID=self.smugmug_id,
@@ -238,12 +224,15 @@ class Album(SyncObject):
                                              Heavy=heavy)['Album']['Images']
 
     def get_description(self):
-        if self.picasa_description and self.picasa_location:
-            return '%s\n%s' % (self.picasa_description, self.picasa_location)
-        elif self.picasa_description:
-            return self.picasa_description
-        elif self.picasa_location:
-            return self.picasa_location
+        desc = self.picasa.get_description()
+        location = self.picasa.get_location()
+
+        if desc and location:
+            return '%s\n%s' % (desc, location)
+        elif desc:
+            return desc
+        elif location:
+            return location
         else:
             return None
 
@@ -289,13 +278,12 @@ class Album(SyncObject):
             logger.debug('--- Creating album for %s (parent: %s)' % (self, self.get_parent()))
             r = self.get_smugmug().albums_create(Title=self.extract_name(),
                                                  CategoryID=self.get_parent_smugmug_id(),
-                                                 Description=self.picasa_description)
+                                                 Description=self.picasa.get_description())
             self.update_from_smugmug(r['Album'])
-            # TODO: Add keywords (and location?) from the Picasa.ini metadata
 
         if self.description_needs_sync():
             # Update the album's description property
-            logger.debug('--- Updating album\'s description %s (parent: %s)' % (self, self.get_parent()))
+            logger.debug('--- Updating album\'s description %s' % self)
             self.get_smugmug().albums_changeSettings(AlbumID=self.smugmug_id, Description=self.get_description())
 
         # Check for images...
@@ -345,17 +333,23 @@ class Album(SyncObject):
 
 
 class Image(SyncObject):
-    def __init__(self, scanner, obj_id, smugmug_id=None, disk_path=None):
+    def __init__(self, scanner, obj_id, smugmug_id=None, disk_path=None, picasa_caption=None, smugmug_caption=None):
         super(Image, self).__init__(scanner, obj_id, smugmug_id, disk_path)
         self.original_url = None
+        self.picasa_caption = picasa_caption
+        self.smugmug_caption = smugmug_caption
         self.duplicated_images = []
 
     @staticmethod
-    def create_from_disk(scanner, folder, name):
-        """ :type scanner: scan.Scanner """
+    def create_from_disk(scanner, folder, name, picasa):
+        """
+        :type scanner: scan.Scanner
+        :type picasa: Picasa
+        """
         image_disk_path = os.path.join(folder, name)
         image_id = SyncObject.path_to_id(scanner.base_dir, image_disk_path)
-        return Image(scanner, image_id, disk_path=image_disk_path)
+        picasa_caption = picasa.get_image_caption(name)
+        return Image(scanner, image_id, disk_path=image_disk_path, picasa_caption=picasa_caption)
 
     @staticmethod
     def create_from_smugmug(scanner, image_id, image):
@@ -370,18 +364,19 @@ class Image(SyncObject):
             self.smugmug_id = image['id']
             self.original_url = image['OriginalURL']
             self.online_last_updated = last_update
+            self.smugmug_caption = image['Caption']
         else:
             # Duplicated image on SmugMug!!! Delete older version
             self.duplicated_images.append(image['id'])
             logger.info('Duplicated image on SmugMug!!! Delete older version %s' % self.id)
 
     def needs_sync(self):
-        # Check for upload, download, delete
-        return super(Image, self).needs_sync() or len(self.duplicated_images) > 0
+        # Check for upload, download, delete, metadata change
+        return super(Image, self).needs_sync() or len(self.duplicated_images) > 0 or self._metadata_needs_sync()
 
     def sync(self, policy):
         if not self.on_smugmug():
-            self.upload()
+            self._upload()
 
         if not self.on_disk():
             if policy == POLICY_DISK_RULES:
@@ -391,7 +386,7 @@ class Image(SyncObject):
                 self.smugmug_id = None
             else:
                 # Download the file to disk
-                self.download()
+                self._download()
 
         if len(self.duplicated_images) > 0:
             # Delete from online any duplicates of this photo (duplicates are identified by file name)
@@ -401,7 +396,11 @@ class Image(SyncObject):
 
             self.duplicated_images = []
 
-    def upload(self):
+        if self._metadata_needs_sync():
+            logger.debug('--- Updating image\'s caption %s to %s' % (self, self.picasa_caption))
+            self.get_smugmug().images_changeSettings(ImageID=self.smugmug_id, Caption=self.picasa_caption)
+
+    def _upload(self):
         upload = True
 
         # Check if an upload is needed...
@@ -419,7 +418,10 @@ class Image(SyncObject):
             logger.debug('--- Uploading image %s' % self)
             self.get_smugmug().images_upload(File=self.disk_path, AlbumID=self.get_parent_smugmug_id())
 
-    def download(self):
+    def _metadata_needs_sync(self):
+        return self.picasa_caption and self.picasa_caption != self.smugmug_caption
+
+    def _download(self):
         self.disk_path = SyncObject.id_to_path(self.scanner.base_dir, self.id)
         r = requests.get(self.original_url)
         with open(self.disk_path, 'wb') as f:
