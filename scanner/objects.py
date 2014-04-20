@@ -1,4 +1,3 @@
-from HTMLParser import HTMLParser
 import os
 import json
 import logging
@@ -7,8 +6,9 @@ import scan
 from datetime import datetime
 from dateutil import parser
 from multiprocessing.pool import ThreadPool
-from .policy import *
 from scanner.picasa import Picasa
+from HTMLParser import HTMLParser
+from .policy import *
 from .utils import date_handler, date_hook
 
 
