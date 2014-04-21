@@ -1,7 +1,9 @@
 import logging
 import os
+from scanner.album import Album
+from scanner.image import Image
 from .smugmug import MySmugMug
-from .objects import Album, Image, Collection
+from .objects import Collection
 from .policy import *
 
 logger = logging.getLogger(__name__)

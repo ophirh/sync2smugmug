@@ -36,6 +36,8 @@ class Picasa(object):
 
     # noinspection PyBroadException
     def get_image_caption(self, name):
+        # TODO: This is not working! The caption is actually stored in the picasa DB.
+        # change and upload the image again (or change caption).
         caption = None
         try:
             caption = self._get_attribute(name, 'caption')
