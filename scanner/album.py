@@ -64,9 +64,8 @@ class Album(SyncObject):
         self.album_key = album['Key']
         if 'LastUpdated' in album:
             self.online_last_updated = datetime.strptime(album['LastUpdated'].partition(' ')[0], '%Y-%m-%d').date()
-        desc = album['Description']
-        if desc:
-            self.smugmug_description = HTMLParser().unescape(desc)
+        if 'Description' in album:
+            self.smugmug_description = HTMLParser().unescape(album['Description'])
 
     def get_images(self, heavy=True):
         return self.get_smugmug().images_get(AlbumID=self.smugmug_id,

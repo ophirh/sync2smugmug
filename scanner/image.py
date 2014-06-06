@@ -54,7 +54,7 @@ class Image(SyncObject):
         if not self.on_disk():
             if policy == POLICY_DISK_RULES:
                 # Delete the online version (as this was deleted from the disk)
-                logger.debug('--- Deleting image %d' % self.smugmug_id)
+                logger.debug('--- Deleting image %s (%d)' % (self.id, self.smugmug_id))
                 self.get_smugmug().images_delete(ImageID=self.smugmug_id)
                 self.smugmug_id = None
             else:
