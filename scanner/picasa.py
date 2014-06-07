@@ -94,12 +94,12 @@ def read_date_field(f):
 
 
 class PMPReader(object):
-    def __init__(self, path):
+    def __init__(self, path, table, field):
         self.path = path
-        self.entries = self._read()
+        self.entries = self._read(table, field)
 
-    def _read(self):
-        with open(self.path, 'rb') as f:
+    def _read(self, table, field):
+        with open(os.path.join(self.path, '%s_%s.pmp' % (table, field)), 'rb') as f:
             if struct.unpack('<I', f.read(4))[0] != 0x3fcccccd:
                 raise IOError('Failed magic1')
 
@@ -149,14 +149,17 @@ class ThumbIndexDBReader(object):
         self.dirs, self.images = self._read()
 
     def _read(self):
-        with open(self.path, 'rb') as f:
-            num_of_items = self._read_header(f)
+        with open(os.path.join(self.path, 'thumbindex.db'), 'rb') as f:
+            if struct.unpack('<I', f.read(4))[0] != 0x40466666:
+                raise IOError('Failed magic')
+
+            num_of_items = struct.unpack('<I', f.read(4))[0]
 
             dirs = {}
-            images = {}
             lookup = {}
-            image_list = []
+            images = []
 
+            # Read the objects first (without trying to link them)
             for i in range(num_of_items):
                 name = read_string_field(f)
                 f.read(26)  # Useless content...
@@ -171,10 +174,10 @@ class ThumbIndexDBReader(object):
                     continue
                 else:
                     image = {'name': name, 'parent': index, 'index': i}
-                    image_list.append(image)
-                    images[i] = image
+                    images.append(image)
 
-            for image in image_list:
+            # Now link everything together
+            for image in images:
                 dir_name = lookup[image['parent']]
                 dirs[dir_name].append(image)
 
@@ -183,16 +186,32 @@ class ThumbIndexDBReader(object):
 
             return dirs, images
 
-    def _read_header(self, f):
-        if struct.unpack('<I', f.read(4))[0] != 0x40466666:
-            raise IOError('Failed magic')
 
-        return struct.unpack('<I', f.read(4))[0]
+class PicasaDB(object):
+    def __init__(self, path):
+        self.path = path
+        self.images = self._construct_db()
 
+    def _construct_db(self):
+        thumbs = ThumbIndexDBReader(self.path)
+
+        # Pick the interesting fields that we want to collect...
+        captions = PMPReader(self.path, 'imagedata', 'caption').entries
+        texts = PMPReader(self.path, 'imagedata', 'text').entries
+
+        # Now construct a single data structure that will hold all images, their captions, etc...
+        images = thumbs.images
+
+        for image in images:
+            image['caption'] = captions[image['index']]
+            image['text'] = texts[image['index']]
+            # TODO: Deal with the case that we reached EOF (index out of bounds)
+
+        return images
 
 if __name__ == '__main__':
     # Test reading the Picasa DB (read the title of images)
     p = 'E:\PicasaDB\Google\Picasa2\db3'
 
-    # print PMPReader(os.path.join(p, 'imagedata_caption.pmp')).entries
-    print ThumbIndexDBReader(os.path.join(p, 'thumbindex.db')).images
+    # print PMPReader(p, 'imagedata', 'caption')).entries
+    print PicasaDB(p).images
