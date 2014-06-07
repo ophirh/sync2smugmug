@@ -1,12 +1,16 @@
 import ConfigParser
 import os
+import struct
+import time
 
 
 class Picasa(object):
     """
     Manages the reading and understanding of the Picasa metadata (stored in INI files)
     """
+
     def __init__(self, dir_path, files):
+        self.picasa_db_location = 'E:\PicasaDB\Google\Picasa2\db3'
         self.ini_files = []
 
         if '.picasa.ini' in files:
@@ -52,3 +56,143 @@ class Picasa(object):
 
         return caption
 
+
+def read_string_field(f):
+    # Read a null terminated string...
+    s = ''
+
+    b = f.read(1)
+    while ord(b) != 0:
+        s += b
+        b = f.read(1)
+
+    return s
+
+
+def read_byte_field(f):
+    return struct.unpack('<B', f.read(1))[0]
+
+
+def read_2byte_field(f):
+    return struct.unpack('<H', f.read(2))[0]
+
+
+def read_4byte_field(f):
+    return struct.unpack('<L', f.read(4))[0]
+
+
+def read_8byte_field(f):
+    return struct.unpack('<Q', f.read(8))[0]
+
+
+def read_date_field(f):
+    # Read Microsoft Variant (date as a double)
+    d = struct.unpack('<d', f.read(8))[0]
+    d -= 25569
+    ut = round(d * 86400l * 1000l)
+    return time.gmtime(ut)
+
+
+class PMPReader(object):
+    def __init__(self, path):
+        self.path = path
+        self.entries = self._read()
+
+    def _read(self):
+        with open(self.path, 'rb') as f:
+            if struct.unpack('<I', f.read(4))[0] != 0x3fcccccd:
+                raise IOError('Failed magic1')
+
+            type = struct.unpack('<H', f.read(2))[0]
+
+            if struct.unpack('<H', f.read(2))[0] != 0x1332:
+                raise IOError('Failed magic2')
+
+            if struct.unpack('<I', f.read(4))[0] != 0x2:
+                raise IOError('Failed magic3')
+
+            if type != struct.unpack('<H', f.read(2))[0]:
+                raise IOError('Failed repeat type %s' % type)
+
+            if struct.unpack('<H', f.read(2))[0] != 0x1332:
+                raise IOError('Failed magic4')
+
+            num_of_items = struct.unpack('<I', f.read(4))[0]
+
+            values = []
+            for _ in range(num_of_items):
+                if type == 0x0:
+                    values.append(read_string_field(f))
+                elif type == 0x1:
+                    values.append(read_4byte_field(f))
+                elif type == 0x2:
+                    values.append(read_date_field(f))
+                elif type == 0x3:
+                    values.append(read_byte_field(f))
+                elif type == 0x4:
+                    values.append(read_8byte_field(f))
+                elif type == 0x5:
+                    values.append(read_2byte_field(f))
+                elif type == 0x6:
+                    values.append(read_string_field(f))
+                elif type == 0x7:
+                    values.append(read_4byte_field(f))
+                else:
+                    raise IOError("Unknown type: %s" % type)
+
+            return values
+
+
+class ThumbIndexDBReader(object):
+    def __init__(self, path):
+        self.path = path
+        self.dirs, self.images = self._read()
+
+    def _read(self):
+        with open(self.path, 'rb') as f:
+            num_of_items = self._read_header(f)
+
+            dirs = {}
+            images = {}
+            lookup = {}
+            image_list = []
+
+            for i in range(num_of_items):
+                name = read_string_field(f)
+                f.read(26)  # Useless content...
+                index = read_4byte_field(f)
+
+                if index == 4294967295:
+                    # This is a folder...
+                    dirs[name] = []
+                    lookup[i] = name
+                elif len(name) == 0:
+                    # Skip virtual copies (for faces)
+                    continue
+                else:
+                    image = {'name': name, 'parent': index, 'index': i}
+                    image_list.append(image)
+                    images[i] = image
+
+            for image in image_list:
+                dir_name = lookup[image['parent']]
+                dirs[dir_name].append(image)
+
+                # Replace image parent index with name
+                image['parent'] = dir_name
+
+            return dirs, images
+
+    def _read_header(self, f):
+        if struct.unpack('<I', f.read(4))[0] != 0x40466666:
+            raise IOError('Failed magic')
+
+        return struct.unpack('<I', f.read(4))[0]
+
+
+if __name__ == '__main__':
+    # Test reading the Picasa DB (read the title of images)
+    p = 'E:\PicasaDB\Google\Picasa2\db3'
+
+    # print PMPReader(os.path.join(p, 'imagedata_caption.pmp')).entries
+    print ThumbIndexDBReader(os.path.join(p, 'thumbindex.db')).images
