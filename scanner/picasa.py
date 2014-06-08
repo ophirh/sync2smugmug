@@ -2,59 +2,7 @@ import ConfigParser
 import os
 import struct
 import time
-
-
-class Picasa(object):
-    """
-    Manages the reading and understanding of the Picasa metadata (stored in INI files)
-    """
-
-    def __init__(self, dir_path, files):
-        self.picasa_db_location = 'E:\PicasaDB\Google\Picasa2\db3'
-        self.ini_files = []
-
-        if '.picasa.ini' in files:
-            picasa_ini1 = ConfigParser.ConfigParser()
-            picasa_ini1.read(os.path.join(dir_path, '.picasa.ini'))
-            self.ini_files.append(picasa_ini1)
-
-        if 'Picasa.ini' in files:
-            picasa_ini2 = ConfigParser.ConfigParser()
-            picasa_ini2.read(os.path.join(dir_path, 'Picasa.ini'))
-            self.ini_files.append(picasa_ini2)
-
-    def _get_attribute(self, section, attribute):
-        for ini_file in self.ini_files:
-            try:
-                return ini_file.get(section, attribute)
-            except ConfigParser.NoOptionError:
-                pass
-
-        return None
-
-    def get_description(self):
-        return self._get_attribute('Picasa', 'Description')
-
-    def get_location(self):
-        return self._get_attribute('Picasa', 'Location')
-
-    # noinspection PyBroadException
-    def get_image_caption(self, name):
-        # TODO: This is not working! The caption is actually stored in the picasa DB.
-        # change and upload the image again (or change caption).
-        caption = None
-        try:
-            caption = self._get_attribute(name, 'caption')
-        except:
-            pass
-
-        if caption is None:
-            try:
-                caption = self._get_attribute(name, 'description')
-            except:
-                pass
-
-        return caption
+from scanner.utils import Singleton
 
 
 def read_string_field(f):
@@ -103,7 +51,7 @@ class PMPReader(object):
             if struct.unpack('<I', f.read(4))[0] != 0x3fcccccd:
                 raise IOError('Failed magic1')
 
-            type = struct.unpack('<H', f.read(2))[0]
+            t = struct.unpack('<H', f.read(2))[0]
 
             if struct.unpack('<H', f.read(2))[0] != 0x1332:
                 raise IOError('Failed magic2')
@@ -111,8 +59,8 @@ class PMPReader(object):
             if struct.unpack('<I', f.read(4))[0] != 0x2:
                 raise IOError('Failed magic3')
 
-            if type != struct.unpack('<H', f.read(2))[0]:
-                raise IOError('Failed repeat type %s' % type)
+            if t != struct.unpack('<H', f.read(2))[0]:
+                raise IOError('Failed repeat type %s' % t)
 
             if struct.unpack('<H', f.read(2))[0] != 0x1332:
                 raise IOError('Failed magic4')
@@ -121,24 +69,24 @@ class PMPReader(object):
 
             values = []
             for _ in range(num_of_items):
-                if type == 0x0:
+                if t == 0x0:
                     values.append(read_string_field(f))
-                elif type == 0x1:
+                elif t == 0x1:
                     values.append(read_4byte_field(f))
-                elif type == 0x2:
+                elif t == 0x2:
                     values.append(read_date_field(f))
-                elif type == 0x3:
+                elif t == 0x3:
                     values.append(read_byte_field(f))
-                elif type == 0x4:
+                elif t == 0x4:
                     values.append(read_8byte_field(f))
-                elif type == 0x5:
+                elif t == 0x5:
                     values.append(read_2byte_field(f))
-                elif type == 0x6:
+                elif t == 0x6:
                     values.append(read_string_field(f))
-                elif type == 0x7:
+                elif t == 0x7:
                     values.append(read_4byte_field(f))
                 else:
-                    raise IOError("Unknown type: %s" % type)
+                    raise IOError("Unknown type: %s" % t)
 
             return values
 
@@ -187,31 +135,86 @@ class ThumbIndexDBReader(object):
             return dirs, images
 
 
+@Singleton
 class PicasaDB(object):
-    def __init__(self, path):
-        self.path = path
+    """
+    Reads the Picasa DB (proprietary format)
+    """
+
+    def __init__(self):
+        self.picasa_db_location = 'E:\PicasaDB\Google\Picasa2\db3'
         self.images = self._construct_db()
 
     def _construct_db(self):
-        thumbs = ThumbIndexDBReader(self.path)
+        thumbs = ThumbIndexDBReader(self.picasa_db_location)
 
         # Pick the interesting fields that we want to collect...
-        captions = PMPReader(self.path, 'imagedata', 'caption').entries
-        texts = PMPReader(self.path, 'imagedata', 'text').entries
+        captions = PMPReader(self.picasa_db_location, 'imagedata', 'caption').entries
+        texts = PMPReader(self.picasa_db_location, 'imagedata', 'text').entries
 
         # Now construct a single data structure that will hold all images, their captions, etc...
         images = thumbs.images
 
         for image in images:
-            image['caption'] = captions[image['index']]
-            image['text'] = texts[image['index']]
-            # TODO: Deal with the case that we reached EOF (index out of bounds)
+            try:
+                caption = captions[image['index']]
+                if caption and len(caption) > 0:
+                    image['caption'] = caption
+            except IndexError:
+                # Reaching EOF...
+                pass
+
+            try:
+                description = texts[image['index']]
+                if description and len(description) > 0:
+                    image['text'] = description
+            except IndexError:
+                # Reaching EOF...
+                pass
 
         return images
 
+    def get_image_caption(self, folder, name):
+        # TODO
+
+        return None
+
+
+class PicasaAlbum(object):
+    """
+    Manages the reading and understanding of the Picasa metadata (stored in INI files) for the given album
+    """
+
+    def __init__(self, album_path, files):
+        self.ini_files = []
+
+        if '.picasa.ini' in files:
+            picasa_ini1 = ConfigParser.ConfigParser()
+            picasa_ini1.read(os.path.join(album_path, '.picasa.ini'))
+            self.ini_files.append(picasa_ini1)
+
+        if 'Picasa.ini' in files:
+            picasa_ini2 = ConfigParser.ConfigParser()
+            picasa_ini2.read(os.path.join(album_path, 'Picasa.ini'))
+            self.ini_files.append(picasa_ini2)
+
+    def _get_attribute(self, section, attribute):
+        for ini_file in self.ini_files:
+            try:
+                return ini_file.get(section, attribute)
+            except ConfigParser.NoOptionError:
+                pass
+
+        return None
+
+    def get_album_description(self):
+        return self._get_attribute('Picasa', 'Description')
+
+    def get_album_location(self):
+        return self._get_attribute('Picasa', 'Location')
+
+
 if __name__ == '__main__':
     # Test reading the Picasa DB (read the title of images)
-    p = 'E:\PicasaDB\Google\Picasa2\db3'
-
     # print PMPReader(p, 'imagedata', 'caption')).entries
-    print PicasaDB(p).images
+    print PicasaDB.instance().images

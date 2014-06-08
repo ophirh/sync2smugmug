@@ -6,7 +6,7 @@ from dateutil import parser
 from scanner import POLICY_SYNC
 from scanner.image import Image
 from scanner.objects import SyncObject, logger, sync_images
-from scanner.picasa import Picasa
+from scanner.picasa import PicasaAlbum
 from scanner.utils import date_handler, date_hook
 
 
@@ -20,6 +20,7 @@ class Album(SyncObject):
         self.metadata_last_updated = None
         self.smugmug_description = None
         self.picasa = None
+        """ :type : Picasa """
 
     @staticmethod
     def create_from_disk(scanner, disk_path, files, images):
@@ -32,11 +33,11 @@ class Album(SyncObject):
         album = Album(scanner, SyncObject.path_to_id(scanner.base_dir, disk_path))
         album.disk_path = disk_path
         album.load_sync_data()
-        album.picasa = Picasa(disk_path, files)
+        album.picasa = PicasaAlbum(disk_path, files)
 
         # Scan images on disk and associate with the album
         for img in images:
-            image = Image.create_from_disk(scanner, disk_path, img, album.picasa)
+            image = Image.create_from_disk(scanner, disk_path, img)
             album.images[image.id] = image
 
         return album
@@ -73,8 +74,8 @@ class Album(SyncObject):
                                              Heavy=heavy)['Album']['Images']
 
     def get_description(self):
-        desc = self.picasa.get_description()
-        location = self.picasa.get_location()
+        desc = self.picasa.get_album_description()
+        location = self.picasa.get_album_location()
 
         if desc and location:
             return '%s\n%s' % (desc, location)
@@ -127,7 +128,7 @@ class Album(SyncObject):
             logger.debug('--- Creating album for %s (parent: %s)' % (self, self.get_parent()))
             r = self.get_smugmug().albums_create(Title=self.extract_name(),
                                                  CategoryID=self.get_parent_smugmug_id(),
-                                                 Description=self.picasa.get_description())
+                                                 Description=self.picasa.get_album_description())
             self.update_from_smugmug(r['Album'])
 
         if self.description_needs_sync():

@@ -3,6 +3,7 @@ import requests
 from datetime import datetime
 from scanner import POLICY_DISK_RULES
 from scanner.objects import SyncObject, logger
+from scanner.picasa import PicasaDB
 
 
 class Image(SyncObject):
@@ -14,14 +15,13 @@ class Image(SyncObject):
         self.duplicated_images = []
 
     @staticmethod
-    def create_from_disk(scanner, folder, name, picasa):
+    def create_from_disk(scanner, folder, name):
         """
         :type scanner: scan.Scanner
-        :type picasa: Picasa
         """
         image_disk_path = os.path.join(folder, name)
         image_id = SyncObject.path_to_id(scanner.base_dir, image_disk_path)
-        picasa_caption = picasa.get_image_caption(name)
+        picasa_caption = PicasaDB.instance().get_image_caption(folder, name)
         return Image(scanner, image_id, disk_path=image_disk_path, picasa_caption=picasa_caption)
 
     @staticmethod
