@@ -93,8 +93,11 @@ class Image(SyncObject):
             self.get_smugmug().images_upload(File=self.disk_path, AlbumID=self.get_parent_smugmug_id())
 
     def _metadata_needs_sync(self):
-        # TODO: Change to take this from image properties
-        # return self.picasa_caption and self.picasa_caption != self.smugmug_caption
+        # TODO: Not working!!!
+        if self.picasa_caption and self.picasa_caption != self.smugmug_caption:
+            return True
+
+        # TODO: Add check for other meta-data attributes here...
         return False
 
     def _download(self):

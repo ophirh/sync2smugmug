@@ -2,6 +2,7 @@ import ConfigParser
 import os
 import struct
 import time
+import config
 from scanner.utils import Singleton
 
 
@@ -115,7 +116,7 @@ class ThumbIndexDBReader(object):
 
                 if index == 4294967295:
                     # This is a folder...
-                    dirs[name] = []
+                    dirs[name] = {}
                     lookup[i] = name
                 elif len(name) == 0:
                     # Skip virtual copies (for faces)
@@ -127,7 +128,7 @@ class ThumbIndexDBReader(object):
             # Now link everything together
             for image in images:
                 dir_name = lookup[image['parent']]
-                dirs[dir_name].append(image)
+                dirs[dir_name][image['name']] = image
 
                 # Replace image parent index with name
                 image['parent'] = dir_name
@@ -142,20 +143,17 @@ class PicasaDB(object):
     """
 
     def __init__(self):
-        self.picasa_db_location = 'E:\PicasaDB\Google\Picasa2\db3'
-        self.images = self._construct_db()
+        self.thumbs = self._construct_db()
 
     def _construct_db(self):
-        thumbs = ThumbIndexDBReader(self.picasa_db_location)
+        thumbs = ThumbIndexDBReader(config.picasa_db_location)
 
         # Pick the interesting fields that we want to collect...
-        captions = PMPReader(self.picasa_db_location, 'imagedata', 'caption').entries
-        texts = PMPReader(self.picasa_db_location, 'imagedata', 'text').entries
+        captions = PMPReader(config.picasa_db_location, 'imagedata', 'caption').entries
+        texts = PMPReader(config.picasa_db_location, 'imagedata', 'text').entries
 
-        # Now construct a single data structure that will hold all images, their captions, etc...
-        images = thumbs.images
-
-        for image in images:
+        # Merge the image data into the index
+        for image in thumbs.images:
             try:
                 caption = captions[image['index']]
                 if caption and len(caption) > 0:
@@ -172,12 +170,23 @@ class PicasaDB(object):
                 # Reaching EOF...
                 pass
 
-        return images
+            # TODO: Merge additional attributes here...
+
+        return thumbs
+
+    def describe(self):
+        print 'Dirs:'
+        for d in self.thumbs.dirs.keys():
+            print d
 
     def get_image_caption(self, folder, name):
-        # TODO
+        if not folder.endswith('\\'):
+            folder += '\\'
 
-        return None
+        try:
+            return self.thumbs.dirs[folder][name]['caption']
+        except KeyError:
+            return None
 
 
 class PicasaAlbum(object):
@@ -217,4 +226,4 @@ class PicasaAlbum(object):
 if __name__ == '__main__':
     # Test reading the Picasa DB (read the title of images)
     # print PMPReader(p, 'imagedata', 'caption')).entries
-    print PicasaDB.instance().images
+    print PicasaDB.instance().get_image_caption('E:\\Pictures\\2014\\2014_05_31 - New England Open Karate', 'P5310600.MOV')

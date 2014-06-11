@@ -1,5 +1,7 @@
+# Do not include the config file (it stores private keys, etc...
+my_config.py
+
 # Ignore downloads
-data/
 *.ipynb
 .idea/
 
