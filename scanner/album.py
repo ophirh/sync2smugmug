@@ -37,7 +37,7 @@ class Album(SyncObject):
 
         # Scan images on disk and associate with the album
         for img in images:
-            image = Image.create_from_disk(scanner, disk_path, img)
+            image = Image.create_from_disk(scanner, disk_path, img, developed_path=album.developed_dir_path)
             album.images[image.id] = image
 
         return album
@@ -59,6 +59,12 @@ class Album(SyncObject):
             if 'SubCategory' in smugmug_album else smugmug_album['Category']['Name']
 
         return os.path.join(collection_id, smugmug_album['Title'])
+
+    @property
+    def developed_dir_path(self):
+        """ If exists, returns the path of the 'Developed' sub-folder for this album """
+        developed_path = os.path.join(self.disk_path, "Developed")
+        return developed_path if os.path.exists(developed_path) else None
 
     def update_from_smugmug(self, album):
         self.smugmug_id = album['id']
@@ -95,7 +101,14 @@ class Album(SyncObject):
             upload_date = parser.parse(self.sync_data['images_uploaded_date'])
             disk_last_updated = datetime.fromtimestamp(os.path.getmtime(self.disk_path))
             if disk_last_updated <= upload_date:
-                return False
+                # Check the date of the developed directory date (if exists)
+                developed_path = self.developed_dir_path
+                if developed_path:
+                    disk_last_updated = datetime.fromtimestamp(os.path.getmtime(developed_path))
+                    if disk_last_updated <= upload_date:
+                        return False
+                else:
+                    return False
 
         return True
 

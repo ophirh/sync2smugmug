@@ -15,13 +15,20 @@ class Image(SyncObject):
         self.duplicated_images = []
 
     @staticmethod
-    def create_from_disk(scanner, folder, name):
+    def create_from_disk(scanner, folder, name, developed_path=None):
         """
         :type scanner: scan.Scanner
         """
         image_disk_path = os.path.join(folder, name)
         image_id = SyncObject.path_to_id(scanner.base_dir, image_disk_path)
         picasa_caption = PicasaDB.instance().get_image_caption(folder, name)
+
+        # Now check if there is a developed version of this image. If there is, take its path instead of the original
+        if developed_path:
+            developed_version = os.path.join(developed_path, name)
+            if os.path.exists(developed_version):
+                image_disk_path = developed_version
+
         return Image(scanner, image_id, disk_path=image_disk_path, picasa_caption=picasa_caption)
 
     @staticmethod

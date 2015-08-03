@@ -62,7 +62,13 @@ class Scanner(object):
         # First, take off the base_dir, then take the base name
         local_path = p[len(self.base_dir):]
         basename = os.path.basename(local_path)
-        return basename.startswith('.') or basename in ['Originals', 'Lightroom', '']
+        if basename.startswith('.'):
+            return True
+        if basename in ('Originals', 'Lightroom', 'Developed', ''):
+            return True
+        if "Picasa" in local_path:
+            return True
+        return False
 
     def _scan_smugmug(self, reset_cache):
         logger.info('Scanning SmugMug for categories...')
