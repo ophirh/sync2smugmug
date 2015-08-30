@@ -213,6 +213,8 @@ class PicasaAlbum(object):
                 return ini_file.get(section, attribute)
             except ConfigParser.NoOptionError:
                 pass
+            except ConfigParser.NoSectionError:
+                pass
 
         return None
 
