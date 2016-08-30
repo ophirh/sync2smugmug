@@ -30,15 +30,15 @@ def sync_images(images, policy):
     :type images: list[scanner.image.Image]
     :type policy: int
     """
-    thread_pool = ThreadPool(10)
+    pool = ThreadPool(processes=10)
 
     results = []
     for i in images:
-        r = thread_pool.apply_async(sync_image, (i, policy))
+        r = pool.apply_async(sync_image, (i, policy))
         results.append(r)
 
-    thread_pool.close()
-    thread_pool.join()
+    pool.close()
+    pool.join()
 
     for r in results:
         # This will raise an exception if any was caught during processing
