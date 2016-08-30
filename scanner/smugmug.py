@@ -40,7 +40,7 @@ class MySmugMug(SmugMug):
 
     def auth_getAccessToken(self, **kwargs):
         """Override the behavior to also save the keys to file once obtained"""
-        rsp = super(MySmugMug, self).auth_getAccessToken(kwargs)
+        rsp = super(MySmugMug, self).auth_getAccessToken(**kwargs)
 
         print 'Update your config.py file with the following values:'
         print "oauth_token = '%s'" % self.oauth_token
