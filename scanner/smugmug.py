@@ -1,51 +1,76 @@
-import os
-import urlparse
 import logging
 import sys
-import config
-from smugpy import SmugMug, SmugMugException
+
+from rauth import OAuth1Session
+
+from config import api_key, api_secret, oauth_token, oauth_token_secret
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+API_BASE_URL = "https://api.smugmug.com/api/v2"
 
-class MySmugMug(SmugMug):
-    def __init__(self, **kwargs):
-        super(MySmugMug, self).__init__(kwargs)
 
-        # Restore previously obtained access key
-        self.oauth_token = config.oauth_token
-        self.oauth_token_secret = config.oauth_token_secret
-        self.api_key = config.api_key
-        self.oauth_secret = config.api_secret
+class SmugMugConnection(object):
+    def __init__(self, nickname):
+        self._nickname = nickname
+        self._session = OAuth1Session(consumer_key=api_key,
+                                      consumer_secret=api_secret,
+                                      access_token=oauth_token,
+                                      access_token_secret=oauth_token_secret)
 
-    @staticmethod
-    def create_with_access_key_established():
-        """ Factory method - creates a connection when the access key was already established """
+        self._headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }
+        # Issue a request to get the user's JSON
+        r = self._session.get("{}/user/{}".format(API_BASE_URL, nickname), headers=self._headers)
+        self._user = r.json()['Response']['User']
+        self._root_folder_uri = self._user['Uris']['Node']['Uri']
 
-        oauth_token = config.oauth_token
-        oauth_token_secret = config.oauth_token_secret
-        api_key = config.api_key
-        oauth_secret = config.api_secret
+    def node_get(self, node_uri=None, with_children=True):
+        node_uri = node_uri or self._root_folder_uri
 
-        api = MySmugMug(api_key=api_key,
-                        oauth_secret=oauth_secret,
-                        oauth_token=oauth_token,
-                        oauth_token_secret=oauth_token_secret,
-                        api_version='1.3.0',
-                        secure=True,
-                        app_name='MigrateFromPicasa')
+        # Get the node
+        r = self._session.get("{}{}".format(API_BASE_URL, node_uri), headers=self._headers)
+        node = r.json()['Response']['Node']
 
-        return api
+        # Node get the children
+        children = []
+        if with_children and node['Type'] != 'Album':
+            r = self._session.get("{}{}!children".format(API_BASE_URL, node_uri), headers=self._headers)
+            children = r.json()['Response']['Node']
 
-    def auth_getAccessToken(self, **kwargs):
-        """Override the behavior to also save the keys to file once obtained"""
-        rsp = super(MySmugMug, self).auth_getAccessToken(**kwargs)
+        return node, children
 
-        print 'Update your config.py file with the following values:'
-        print "oauth_token = '%s'" % self.oauth_token
-        print "oauth_token_secret = '%s'" % self.oauth_token_secret
-        print "api_key = '%s'" % self.api_key
-        print "api_secret = '%s'" % self.api_secret
+    def album_get_all(self):
+        r = self._session.get("{}/user/{}!albums".format(API_BASE_URL, self._nickname), headers=self._headers)
+        return r.json()['Response']['Album']
 
-        return rsp
+    def images_get(self, **kwargs):
+        # TODO
+        pass
+
+    def images_delete(self, **kwargs):
+        # TODO
+        pass
+
+    def images_changeSettings(self, **kwargs):
+        # TODO
+        pass
+
+    def images_update(self, **kwargs):
+        # TODO
+        pass
+
+    def albums_changeSettings(self, **kwargs):
+        # TODO
+        pass
+
+    def categories_create(self, **kwargs):
+        # TODO
+        pass
+
+    def subcategories_create(self, **kwargs):
+        # TODO
+        pass

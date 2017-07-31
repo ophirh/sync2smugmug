@@ -6,4 +6,4 @@ python-dateutil>=2.2
 pytz>=2014.2
 requests>=2.2.1
 six>=1.6.1
-smugpy>=0.3.1
+rauth>=0.7.3

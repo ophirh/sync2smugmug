@@ -1,8 +1,10 @@
-from HTMLParser import HTMLParser
-from datetime import datetime
 import json
 import os
+from HTMLParser import HTMLParser
+from datetime import datetime
+
 from dateutil import parser
+
 from scanner import POLICY_SYNC
 from scanner.image import Image
 from scanner.objects import SyncObject, logger, sync_images
@@ -75,9 +77,9 @@ class Album(SyncObject):
             self.smugmug_description = HTMLParser().unescape(album['Description'])
 
     def get_images(self, heavy=True):
-        return self.get_smugmug().images_get(AlbumID=self.smugmug_id,
-                                             AlbumKey=self.album_key,
-                                             Heavy=heavy)['Album']['Images']
+        return self.smugmug.images_get(AlbumID=self.smugmug_id,
+                                       AlbumKey=self.album_key,
+                                       Heavy=heavy)['Album']['Images']
 
     def get_description(self):
         desc = self.picasa.get_album_description()
@@ -139,15 +141,15 @@ class Album(SyncObject):
         if not self.on_smugmug():
             # Make the album in Smugmug (including keywords, etc...)
             logger.debug('--- Creating album for %s (parent: %s)' % (self, self.get_parent()))
-            r = self.get_smugmug().albums_create(Title=self.extract_name(),
-                                                 CategoryID=self.get_parent_smugmug_id(),
-                                                 Description=self.picasa.get_album_description())
+            r = self.smugmug().albums_create(Title=self.extract_name(),
+                                             CategoryID=self.get_parent_smugmug_id(),
+                                             Description=self.picasa.get_album_description())
             self.update_from_smugmug(r['Album'])
 
         if self.description_needs_sync():
             # Update the album's description property
             logger.debug('--- Updating album\'s description %s' % self)
-            self.get_smugmug().albums_changeSettings(AlbumID=self.smugmug_id, Description=self.get_description())
+            self.smugmug.albums_changeSettings(AlbumID=self.smugmug_id, Description=self.get_description())
 
         # Check for images...
         if self.images_need_sync():

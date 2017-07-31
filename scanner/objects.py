@@ -75,7 +75,8 @@ class SyncObject(object):
     def on_disk(self):
         return self.disk_path is not None
 
-    def get_smugmug(self):
+    @property
+    def smugmug(self):
         return self.scanner.smugmug
 
     def get_parent(self):
@@ -124,7 +125,7 @@ class Collection(SyncObject):
         return coll
 
     def update_from_smugmug(self, category):
-        self.smugmug_id = category['id']
+        self.smugmug_id = category['NodeID']
 
     def is_smugmug_category(self):
         # It is a category (vs. subcategory) if it is a top level item
@@ -144,11 +145,11 @@ class Collection(SyncObject):
             # Upload: Make the folder in Smugmug (including keywords, etc...)
             if self.is_smugmug_category():
                 logger.debug('--- Creating category for %s' % self)
-                r = self.get_smugmug().categories_create(Name=self.extract_name())
+                r = self.smugmug.categories_create(Name=self.extract_name())
                 self.smugmug_id = r['Category']['id']
             else:
                 logger.debug('--- Creating subcategory for %s' % self)
-                r = self.get_smugmug().subcategories_create(Name=self.extract_name(),
+                r = self.smugmug.subcategories_create(Name=self.extract_name(),
                                                             CategoryID=self.get_parent_smugmug_id())
                 self.smugmug_id = r['SubCategory']['id']
         else:

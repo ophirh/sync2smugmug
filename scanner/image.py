@@ -62,7 +62,7 @@ class Image(SyncObject):
             if policy == POLICY_DISK_RULES:
                 # Delete the online version (as this was deleted from the disk)
                 logger.debug('--- Deleting image %s (%d)' % (self.id, self.smugmug_id))
-                self.get_smugmug().images_delete(ImageID=self.smugmug_id)
+                self.smugmug.images_delete(ImageID=self.smugmug_id)
                 self.smugmug_id = None
             else:
                 # Download the file to disk
@@ -71,13 +71,13 @@ class Image(SyncObject):
         if self._metadata_needs_sync() and self.smugmug_id:
             # TODO: This is not getting called yet...
             logger.debug('--- Updating image\'s caption %s to %s' % (self, self.picasa_caption))
-            self.get_smugmug().images_changeSettings(ImageID=self.smugmug_id, Caption=self.picasa_caption)
+            self.smugmug.images_changeSettings(ImageID=self.smugmug_id, Caption=self.picasa_caption)
 
         if len(self.duplicated_images) > 0:
             # Delete from online any duplicates of this photo (duplicates are identified by file name)
             for smugmug_id in self.duplicated_images:
                 logger.debug('--- Deleting duplicated image %d' % smugmug_id)
-                self.get_smugmug().images_delete(ImageID=smugmug_id)
+                self.smugmug.images_delete(ImageID=smugmug_id)
 
             self.duplicated_images = []
 
@@ -93,11 +93,11 @@ class Image(SyncObject):
             # Need to delete existing images that need update
             if self.on_smugmug():
                 logger.debug('--- Deleting image (for replacement) %s' % self.id)
-                self.get_smugmug().images_delete(ImageID=self.smugmug_id)
+                self.smugmug.images_delete(ImageID=self.smugmug_id)
                 self.smugmug_id = None
 
             logger.debug('--- Uploading image %s' % self)
-            self.get_smugmug().images_upload(File=self.disk_path, AlbumID=self.get_parent_smugmug_id())
+            self.smugmug.images_upload(File=self.disk_path, AlbumID=self.get_parent_smugmug_id())
 
     def _metadata_needs_sync(self):
         # TODO: Not working!!!
