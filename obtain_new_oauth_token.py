@@ -1,10 +1,9 @@
 import sys
-from urllib import urlencode
-from urlparse import urlsplit, parse_qsl, urlunsplit
+from urllib.parse import urlencode, urlunsplit, parse_qsl, urlsplit
 
 from rauth import OAuth1Session, OAuth1Service
 
-from config import api_key, api_secret
+from sync2smugmug import api_key, api_secret
 
 OAUTH_ORIGIN = 'https://secure.smugmug.com'
 REQUEST_TOKEN_URL = OAUTH_ORIGIN + '/services/oauth/1.0a/getRequestToken'

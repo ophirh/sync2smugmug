@@ -1,22 +1,16 @@
-# Do not include the config file (it stores private keys, etc...
-my_config.py
+# Ignore private config file
+*.my.conf
 
-# Ignore downloads
-*.ipynb
 .idea/
-
-# Byte-compiled / optimized / DLL files
+*.ipynb
 __pycache__/
 *.py[cod]
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 share/
 include/
 env/
+venv/
 bin/
 build/
 develop-eggs/
@@ -34,6 +28,7 @@ var/
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+pip-selfcheck.json
 
 # Unit test / coverage reports
 .tox/
@@ -41,17 +36,6 @@ pip-delete-this-directory.txt
 .cache
 nosetests.xml
 coverage.xml
-
-# Translations
-*.mo
-
-# Mr Developer
-.mr.developer.cfg
-.project
-.pydevproject
-
-# Rope
-.ropeproject
 
 # Django stuff:
 *.log

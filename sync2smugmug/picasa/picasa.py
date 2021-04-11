@@ -1,72 +1,70 @@
-import ConfigParser
+import configparser
 import os
 import struct
 import time
-import config
-from scanner.utils import Singleton
 
 
 def read_string_field(f):
     # Read a null terminated string...
-    s = ''
+    s = b''
 
     b = f.read(1)
     while ord(b) != 0:
         s += b
         b = f.read(1)
 
-    return s
+    return s.decode()
 
 
 def read_byte_field(f):
-    return struct.unpack('<B', f.read(1))[0]
+    return struct.unpack(b'<B', f.read(1))[0]
 
 
 def read_2byte_field(f):
-    return struct.unpack('<H', f.read(2))[0]
+    return struct.unpack(b'<H', f.read(2))[0]
 
 
 def read_4byte_field(f):
-    return struct.unpack('<L', f.read(4))[0]
+    return struct.unpack(b'<L', f.read(4))[0]
 
 
 def read_8byte_field(f):
-    return struct.unpack('<Q', f.read(8))[0]
+    return struct.unpack(b'<Q', f.read(8))[0]
 
 
 def read_date_field(f):
     # Read Microsoft Variant (date as a double)
-    d = struct.unpack('<d', f.read(8))[0]
+    d = struct.unpack(b'<d', f.read(8))[0]
     d -= 25569
-    ut = round(d * 86400l * 1000l)
+    ut = round(d * 86400 * 1000)
     return time.gmtime(ut)
 
 
-class PMPReader(object):
+class PMPReader:
     def __init__(self, path, table, field):
         self.path = path
         self.entries = self._read(table, field)
 
     def _read(self, table, field):
-        with open(os.path.join(self.path, '%s_%s.pmp' % (table, field)), 'rb') as f:
-            if struct.unpack('<I', f.read(4))[0] != 0x3fcccccd:
+        with open(os.path.join(self.path, '{}_{}.pmp'.format(table, field)), 'rb') as f:
+            if struct.unpack(b'<I', f.read(4))[0] != 0x3fcccccd:
                 raise IOError('Failed magic1')
 
-            t = struct.unpack('<H', f.read(2))[0]
+            t = struct.unpack(b'<H', f.read(2))[0]
 
-            if struct.unpack('<H', f.read(2))[0] != 0x1332:
+            if struct.unpack(b'<H', f.read(2))[0] != 0x1332:
                 raise IOError('Failed magic2')
 
-            if struct.unpack('<I', f.read(4))[0] != 0x2:
+            if struct.unpack(b'<I', f.read(4))[0] != 0x2:
                 raise IOError('Failed magic3')
 
-            if t != struct.unpack('<H', f.read(2))[0]:
+            if t != struct.unpack(b'<H', f.read(2))[0]:
                 raise IOError('Failed repeat type %s' % t)
 
-            if struct.unpack('<H', f.read(2))[0] != 0x1332:
+            if struct.unpack(b'<H', f.read(2))[0] != 0x1332:
                 raise IOError('Failed magic4')
 
-            num_of_items = struct.unpack('<I', f.read(4))[0]
+            num_of_items = struct.unpack(b'<I', f.read(4))[0]
 
             values = []
             for _ in range(num_of_items):
@@ -87,19 +85,19 @@ class PMPReader(object):
                 elif t == 0x7:
                     values.append(read_4byte_field(f))
                 else:
-                    raise IOError("Unknown type: %s" % t)
+                    raise IOError('Unknown type: {}'.format(t))
 
             return values
 
 
-class ThumbIndexDBReader(object):
+class ThumbIndexDBReader:
     def __init__(self, path):
         self.path = path
         self.dirs, self.images = self._read()
 
     def _read(self):
         with open(os.path.join(self.path, 'thumbindex.db'), 'rb') as f:
-            if struct.unpack('<I', f.read(4))[0] != 0x40466666:
+            if struct.unpack(b'<I', f.read(4))[0] != 0x40466666:
                 raise IOError('Failed magic')
 
             num_of_items = struct.unpack('<I', f.read(4))[0]
@@ -136,21 +134,21 @@ class ThumbIndexDBReader(object):
             return dirs, images
 
 
-@Singleton
 class PicasaDB(object):
     """
     Reads the Picasa DB (proprietary format)
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        self.picasa_db_location = kwargs['picasa_db_location']
         self.thumbs = self._construct_db()
 
     def _construct_db(self):
-        thumbs = ThumbIndexDBReader(config.picasa_db_location)
+        thumbs = ThumbIndexDBReader(self.picasa_db_location)
 
         # Pick the interesting fields that we want to collect...
-        captions = PMPReader(config.picasa_db_location, 'imagedata', 'caption').entries
-        texts = PMPReader(config.picasa_db_location, 'imagedata', 'text').entries
+        captions = PMPReader(self.picasa_db_location, 'imagedata', 'caption').entries
+        texts = PMPReader(self.picasa_db_location, 'imagedata', 'text').entries
 
         # Merge the image data into the index
         for image in thumbs.images:
@@ -170,16 +168,16 @@ class PicasaDB(object):
                 # Reaching EOF...
                 pass
 
-            # TODO: Merge additional attributes here...
+                # TODO: Merge additional attributes here...
 
         return thumbs
 
     def describe(self):
-        print 'Dirs:'
+        print('Dirs:')
         for d in self.thumbs.dirs.keys():
-            print d
+            print(d)
 
-    def get_image_caption(self, folder, name):
+    def get_image_caption(self, folder: str, name: str) -> str:
         if not folder.endswith('\\'):
             folder += '\\'
 
@@ -189,7 +187,7 @@ class PicasaDB(object):
             return None
 
 
-class PicasaAlbum(object):
+class PicasaAlbum:
     """
     Manages the reading and understanding of the Picasa metadata (stored in INI files) for the given album
     """
@@ -198,12 +196,12 @@ class PicasaAlbum(object):
         self.ini_files = []
 
         if '.picasa.ini' in files:
-            picasa_ini1 = ConfigParser.ConfigParser()
+            picasa_ini1 = configparser.ConfigParser()
             picasa_ini1.read(os.path.join(album_path, '.picasa.ini'))
             self.ini_files.append(picasa_ini1)
 
         if 'Picasa.ini' in files:
-            picasa_ini2 = ConfigParser.ConfigParser()
+            picasa_ini2 = configparser.ConfigParser()
             picasa_ini2.read(os.path.join(album_path, 'Picasa.ini'))
             self.ini_files.append(picasa_ini2)
 
@@ -211,9 +209,9 @@ class PicasaAlbum(object):
         for ini_file in self.ini_files:
             try:
                 return ini_file.get(section, attribute)
-            except ConfigParser.NoOptionError:
+            except configparser.NoOptionError:
                 pass
-            except ConfigParser.NoSectionError:
+            except configparser.NoSectionError:
                 pass
 
         return None
@@ -228,4 +226,5 @@ class PicasaAlbum(object):
 if __name__ == '__main__':
     # Test reading the Picasa DB (read the title of images)
     # print PMPReader(p, 'imagedata', 'caption')).entries
-    print PicasaDB.instance().get_image_caption('E:\\Pictures\\2014\\2014_05_31 - New England Open Karate', 'P5310600.MOV')
+    print(PicasaDB().get_image_caption('E:\\Pictures\\2014\\2014_05_31 - New England Open Karate',
+                                       'P5310600.MOV'))
