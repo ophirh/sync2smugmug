@@ -1,10 +1,4 @@
-ExifRead>=1.4.2
-MarkupSafe>=0.19
-argparse>=1.1
-dateutils>=0.6.6
-python-dateutil>=2.2
-pytz>=2014.2
-requests>=2.2.1
-six>=1.6.1
+requests>=2.25.1
 rauth>=0.7.3
-ConfigArgParse>=0.12.0
+ConfigArgParse>=1.4
+python-dateutil>=2.8.1
