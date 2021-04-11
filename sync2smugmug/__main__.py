@@ -16,9 +16,7 @@ def main():
     on_disk, on_smugmug = scan()
 
     diff = sync(on_disk=on_disk, on_smugmug=on_smugmug, sync_type=sync_type)
-
-    if diff is not None:
-        print_summary(on_disk, on_smugmug, diff)
+    print_summary(on_disk, on_smugmug, diff)
 
 
 main()
