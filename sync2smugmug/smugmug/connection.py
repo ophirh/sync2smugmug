@@ -99,7 +99,7 @@ class SmugMugConnection:
             albums = self._get_items(folder['Uris']['FolderAlbums']['Uri'], object_name='Album')
 
         else:
-            sub_folders, albums = (None, None)
+            sub_folders, albums = None, None
 
         return folder, sub_folders, albums
 
@@ -122,6 +122,7 @@ class SmugMugConnection:
         if node_on_disk.is_folder:
             folder_uri = r['Node']['Uris']['FolderByID']['Uri']
             node = self.request_get(folder_uri)
+
         else:
             album_uri = r['Node']['Uris']['Album']['Uri']
             node = self.request_get(album_uri)
