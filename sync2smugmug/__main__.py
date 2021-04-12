@@ -8,8 +8,8 @@ from .sync import scan, sync, print_summary
 def main():
     print(config)
 
-    sync_type: Tuple[SyncTypeAction] = SyncType.online_backup()
-    # sync_type: Tuple[SyncTypeAction] = SyncType.online_backup_clean()
+    # sync_type: Tuple[SyncTypeAction] = SyncType.online_backup()
+    sync_type: Tuple[SyncTypeAction] = SyncType.online_backup_clean()
     # sync_type: Tuple[SyncTypeAction] = SyncType.local_backup()
     # sync_type: Tuple[SyncTypeAction] = SyncType.two_way_sync_no_deletes()
 

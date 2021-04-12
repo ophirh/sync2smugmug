@@ -95,12 +95,8 @@ class SmugMugConnection:
 
         # Node get the children
         if with_children:
-            sub_folders, albums = ([], [])
-
             sub_folders = self._get_items(folder['Uris']['Folders']['Uri'], object_name='Folder')
-
-            if not sub_folders:
-                albums = self._get_items(folder['Uris']['FolderAlbums']['Uri'], object_name='Album')
+            albums = self._get_items(folder['Uris']['FolderAlbums']['Uri'], object_name='Album')
 
         else:
             sub_folders, albums = (None, None)
