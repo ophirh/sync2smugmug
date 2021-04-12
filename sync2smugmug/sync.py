@@ -43,7 +43,6 @@ def scan() -> Tuple[FolderOnDisk, FolderOnSmugmug]:
 
 def sync(on_disk: FolderOnDisk,
          on_smugmug: FolderOnSmugmug,
-         sync_type: Tuple[SyncTypeAction, ...],
          action_callback: Callable[[Action], None] = None) -> List[Action]:
     """
     Given scan results, generates a set of actions required to sync between the disk and smugmug
@@ -51,9 +50,10 @@ def sync(on_disk: FolderOnDisk,
 
     :param on_disk: Root for on disk scans
     :param on_smugmug: Root for on smugmug scans
-    :param sync_type: Type of synchronization
     :param action_callback: An optional callback function that is called for each action added
     """
+
+    sync_type = config.sync
 
     actions: List[Action] = []
 

@@ -1,16 +1,17 @@
 import logging
 import os
 import sys
+from typing import Tuple
 
 import configargparse
+
+from sync2smugmug.policy import SyncTypeAction, SyncType
 
 
 class Config:
     def __init__(self, args):
         self._args = args
-
         self._check_config()
-
         self._config_logger()
 
     def _check_config(self):
@@ -19,13 +20,18 @@ class Config:
 
     def _config_logger(self):
         # Suppress some messages
-        # logging.getLogger('urllib3.connectionpool').setLevel(logging.INFO)
         logging.basicConfig(stream=sys.stdout,
                             level=getattr(logging, self.log_level),
                             format='%(asctime)s - %(message)s')
 
     def __repr__(self):
-        return f'Working off {self.base_dir}: dry_run={self.dry_run}'
+        return f'Sync [{self._args.sync}] - Working off {self.base_dir}: dry_run={self.dry_run}'
+
+    @property
+    def sync(self) -> Tuple[SyncTypeAction, ...]:
+        name = self._args.sync
+        method = getattr(SyncType, name)
+        return method()
 
     @property
     def base_dir(self) -> str:
@@ -74,6 +80,15 @@ def parse_config() -> Config:
 
     # Load command line arguments (and from config files)
     arg_parser = configargparse.ArgParser(default_config_files=config_files)
+
+    arg_parser.add_argument('--sync',
+                            required=True,
+                            help='Type of sync to perform',
+                            choices=['online_backup',
+                                     'online_backup_clean',
+                                     'local_backup',
+                                     'local_backup_clean',
+                                     'two_way_sync_no_deletes'])
     arg_parser.add_argument('--base_dir', required=True, help='Full path to pictures folder')
     arg_parser.add_argument('--picasa_db_location', required=False, help='Full path to picasa DB')
     arg_parser.add_argument('--account', required=True, help='Name (nickname) of SmugMug account')
