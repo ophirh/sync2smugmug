@@ -158,7 +158,7 @@ def recurse_sync_folders(from_folder: Folder,
         # If delete is required, delete all children of 'to_node' that do not exist in 'from_node'
         for name, to_album in to_folder.albums.items():
             if name not in from_folder.albums:
-                logger.debug('[-{}] {}'.format(to_album.source[0], to_album.relative_path))
+                logger.debug(f'[-{to_album.source[0]}] {to_album.relative_path}')
                 delete.append(to_album)
 
         for node in delete:

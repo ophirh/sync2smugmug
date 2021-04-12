@@ -57,7 +57,7 @@ class Image:
         return i
 
     def __repr__(self) -> str:
-        return '{} {}'.format(self.__class__.__name__, self.relative_path)
+        return f'{self.__class__.__name__} {self.relative_path}'
 
     def delete(self, dry_run: bool):
         raise NotImplementedError()

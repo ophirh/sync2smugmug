@@ -16,6 +16,11 @@ class DiskScanner:
 
     @timeit
     def scan(self) -> FolderOnDisk:
+        """
+        Discover hierarchy of folders and albums on disk
+
+        :return: The root folder for images on disk
+        """
         logger.info(f'Scanning disk (starting from {self.base_dir})...')
 
         # Keep a lookup table to be able to get the node (by path) for quick access during the os.walk
@@ -81,9 +86,12 @@ class DiskScanner:
         :param str relative_path: Relative path to folder
         """
 
-        basename = os.path.basename(full_path).lower()
+        basename = os.path.basename(full_path)
 
-        if basename.startswith('.') or any(a in basename for a in ('originals', 'lightroom', 'developed')):
+        if basename.startswith('.'):
+            return True
+
+        if any(a in basename.lower() for a in ('originals', 'lightroom', 'developed')):
             return True
 
         if 'Picasa' in relative_path:

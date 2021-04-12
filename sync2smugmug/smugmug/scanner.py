@@ -27,18 +27,21 @@ class SmugmugScanner:
 
     @timeit
     def scan(self) -> FolderOnSmugmug:
+        """
+        Discover hierarchy of folders and albums on Smugmug
+
+        :return: The root folder for images on smugmug
+        """
         logger.info(f'Scanning SmugMug (starting from {self._connection.root_folder_uri})...')
 
-        return self._scan(node_uri=None,
-                          path=os.sep,
-                          parent=None)
+        return self._scan(node_uri=None, path=os.sep, parent=None)
 
     def _scan(self,
               node_uri: Optional[str],
               path: str,
               parent: Union[FolderOnSmugmug, AlbumOnSmugmug, None]):
         """
-        Recursively called to dig into Smugmug until Albums are reached
+        Recursively on folders called to dig into Smugmug
         """
 
         folder_record, sub_folders, albums = self._connection.folder_get(folder_uri=node_uri)
@@ -58,10 +61,12 @@ class SmugmugScanner:
                     # Skip over the test folder (this will be only scratch, visible only to me)
                     continue
 
+                # Recursively call on this folder to discover the sub-tree
                 sub_folder = self._scan(node_uri=sub_folder_uri,
                                         path=os.path.join(path, sub_folder_name),
                                         parent=folder)
 
+                # Associate the sub_folder with its parent
                 folder.sub_folders[sub_folder_name] = sub_folder
                 logger.debug(f'{sub_folder.relative_path} - scanned')
 
@@ -80,6 +85,7 @@ class SmugmugScanner:
                                        record=album_record,
                                        smugmug_connection=self._connection)
 
+                # Associate the album with its parent
                 folder.albums[album_name] = album
                 logger.debug(f'{album.relative_path} - scanned')
 

@@ -14,7 +14,7 @@ def image_download(connection, image, to_album):
     :param AlbumOnDisk to_album: destination album
     """
 
-    print('Downloading {} to {}'.format(image, to_album))
+    print(f'Downloading {image} to {to_album}')
 
     from .disk.image import ImageOnDisk
     image_on_disk = ImageOnDisk(album=to_album, relative_path=image.relative_path)
@@ -33,7 +33,7 @@ def image_upload(connection, to_album, image_on_disk, image_to_replace=None):
     """
 
     try:
-        print('Uploading {}'.format(image_on_disk))
+        print(f'Uploading {image_on_disk}')
 
         headers = {
             'X-Smug-AlbumUri': to_album.album_uri,

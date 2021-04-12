@@ -46,7 +46,7 @@ class PMPReader:
         self.entries = self._read(table, field)
 
     def _read(self, table, field):
-        with open(os.path.join(self.path, '{}_{}.pmp'.format(table, field)), 'rb') as f:
+        with open(os.path.join(self.path, f'{table}_{field}.pmp'), 'rb') as f:
             if struct.unpack(b'<I', f.read(4))[0] != 0x3fcccccd:
                 raise IOError('Failed magic1')
 
@@ -59,7 +59,7 @@ class PMPReader:
                 raise IOError('Failed magic3')
 
             if t != struct.unpack(b'<H', f.read(2))[0]:
-                raise IOError('Failed repeat type %s' % t)
+                raise IOError(f'Failed repeat type {t}')
 
             if struct.unpack(b'<H', f.read(2))[0] != 0x1332:
                 raise IOError('Failed magic4')
@@ -85,7 +85,7 @@ class PMPReader:
                 elif t == 0x7:
                     values.append(read_4byte_field(f))
                 else:
-                    raise IOError('Unknown type: {}'.format(t))
+                    raise IOError(f'Unknown type: {t}')
 
             return values
 

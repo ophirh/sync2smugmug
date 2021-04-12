@@ -107,6 +107,6 @@ def timeit(f):
         finally:
             elapsed = time.time() - start
             if elapsed > 1:
-                logger.info('!---- {} execution time: {:.2f} sec ----!'.format(f.__name__, elapsed))
+                logger.info(f'!---- {f.__name__} execution time: {elapsed:.2f} sec ----!')
 
     return timed
