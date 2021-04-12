@@ -71,8 +71,7 @@ def sync(on_disk: FolderOnDisk,
                           action_callback=action_callback,
                           sync_type=sync_type)
 
-    if actions is not None:
-        print_summary(on_disk, on_smugmug, actions)
+    print_summary(on_disk, on_smugmug, actions)
 
     wait_for_all_tasks()
 
