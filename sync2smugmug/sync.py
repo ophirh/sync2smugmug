@@ -17,7 +17,7 @@ from .disk import DiskScanner, FolderOnDisk, AlbumOnDisk
 from .node import Album, Folder
 from .policy import SyncTypeAction
 from .smugmug import SmugmugScanner, FolderOnSmugmug, AlbumOnSmugmug
-from .utils import wait_for_all_tasks, timeit
+from .utils import TaskPool, timeit
 
 logger = logging.getLogger(__name__)
 
@@ -58,22 +58,21 @@ def sync(on_disk: FolderOnDisk,
     actions: List[Action] = []
 
     if action_callback is None:
-        def perform_action(action: Action):
+        def default_callback(action: Action):
             # Run action without the wrapper
             action.perform(config.dry_run)
             actions.append(action)
 
-        action_callback = perform_action
+        action_callback = default_callback
 
     generate_sync_actions(on_disk=on_disk,
                           on_smugmug=on_smugmug,
-                          base_dir=config.base_dir,
                           action_callback=action_callback,
                           sync_type=sync_type)
 
     print_summary(on_disk, on_smugmug, actions)
 
-    wait_for_all_tasks()
+    TaskPool.wait_for_all_tasks()
 
     return actions
 
@@ -230,7 +229,6 @@ def sync_albums(from_album: Album,
 @timeit
 def generate_sync_actions(on_disk: FolderOnDisk,
                           on_smugmug: FolderOnSmugmug,
-                          base_dir: str,
                           action_callback: Callable[[Action], None],
                           sync_type: Tuple[SyncTypeAction, ...]):
     """
@@ -238,7 +236,6 @@ def generate_sync_actions(on_disk: FolderOnDisk,
 
     :param on_disk: root for hierarchy on disk
     :param on_smugmug: root for hierarchy on Smugmug
-    :param base_dir: Directory of pictures on disk
     :param action_callback: Optional call back to be called each time an action is determined
     :param sync_type: What to do
     """
