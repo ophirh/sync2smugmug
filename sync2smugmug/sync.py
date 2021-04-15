@@ -193,16 +193,16 @@ def sync_albums(from_album: Album,
         # Shallow compare shows equality
         if from_album.deep_compare(to_album) == 0:
             # Objects are really equal. Update sync data to make sure shallow_compare will show equality next time
-            need_sync, only_update_sync_data = (False, True)
+            need_sync, only_update_sync_data = False, True
 
         else:
-            need_sync, only_update_sync_data = (True, False)
+            need_sync, only_update_sync_data = True, False
 
     # Figure out which of the nodes is on disk and which is on Smugmug (can go both ways)
     if isinstance(from_album, AlbumOnDisk):
-        node_on_disk, node_on_smugmug = (from_album, to_album)
+        node_on_disk, node_on_smugmug = from_album, to_album
     else:
-        node_on_disk, node_on_smugmug = (to_album, from_album)
+        node_on_disk, node_on_smugmug = to_album, from_album
 
     assert isinstance(node_on_smugmug, AlbumOnSmugmug)
 
