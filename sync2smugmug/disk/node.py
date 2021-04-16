@@ -115,7 +115,6 @@ class AlbumOnDisk(Album, OnDisk):
                                         relative_path=os.path.join(self.relative_path, f))
                             for f in os.listdir(self.disk_path) if ImageOnDisk.is_image(f)]
 
-        assert self._images is not None
         return self._images
 
     def reload_images(self):
