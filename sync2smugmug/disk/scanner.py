@@ -91,7 +91,9 @@ class DiskScanner:
         if basename.startswith('.'):
             return True
 
-        if any(a in basename.lower() for a in ('originals', 'lightroom', 'developed')):
+        basename = basename.lower()
+
+        if any(a in basename for a in ('originals', 'lightroom', 'developed')):
             return True
 
         if 'Picasa' in relative_path:
