@@ -1,5 +1,4 @@
 import pprint
-import sys
 from urllib.parse import urlencode, urlunsplit, parse_qsl, urlsplit
 
 from rauth import OAuth1Session, OAuth1Service
@@ -69,8 +68,8 @@ def main():
     # The access token we have received is valid forever, unless the user
     # revokes it.  Let's make one example API request to show that the access
     # token works.
-    print(f'Access token: {at}')
-    print(f'Access token secret: {ats}')
+    print(f'Access token:          {at}')
+    print(f'Access token secret:   {ats}')
 
     session = OAuth1Session(service.consumer_key,
                             service.consumer_secret,
