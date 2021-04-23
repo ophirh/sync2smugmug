@@ -23,13 +23,13 @@ class TaskPool:
         self._done: List[bool] = []
         self._errors: List[Exception] = []
         self._all_done_callback = all_done_callback
-        self._cond = threading.Condition(threading.Lock())
+        self._lock = threading.Lock()
 
         if self._pool is None:
             self._pool = Pool(processes=self.PROCESSES)
 
     def apply_async(self, func: Callable, params: Tuple = tuple(), callback: Callable = None):
-        with self._cond:
+        with self._lock:
             # Wrap the callback (if provided) with our own for tracking purposes
             idx = len(self._done)
             self._done.append(False)
@@ -68,11 +68,11 @@ class TaskPool:
         return self._errors
 
     def mark_done(self, idx):
-        with self._cond:
+        with self._lock:
             self._done[idx] = True
 
     def all_done(self):
-        with self._cond:
+        with self._lock:
             return all(self._done)
 
     def join(self):
