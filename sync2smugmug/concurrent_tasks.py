@@ -50,7 +50,8 @@ def image_upload(connection, to_album, image_on_disk, image_to_replace=None):
         with open(image_on_disk.disk_path, 'rb') as f:
             image_data = f.read()
 
-        r = connection.request('POST', 'https://upload.smugmug.com/', files={'file': (image_on_disk.name, image_data)},
+        r = connection.request('POST', 'https://upload.smugmug.com/',
+                               files={'file': (image_on_disk.name, image_data)},
                                headers=headers)
         r.raise_for_status()
 
