@@ -39,7 +39,7 @@ class SmugmugScanner:
     def _scan(self,
               node_uri: Optional[str],
               path: str,
-              parent: Union[FolderOnSmugmug, AlbumOnSmugmug, None]):
+              parent: Union[FolderOnSmugmug, AlbumOnSmugmug, None]) -> FolderOnSmugmug:
         """
         Recursively on folders called to dig into Smugmug
         """
@@ -83,7 +83,7 @@ class SmugmugScanner:
                 album = AlbumOnSmugmug(parent=folder,
                                        relative_path=os.path.join(path, album_name),
                                        record=album_record,
-                                       smugmug_connection=self._connection)
+                                       connection=self._connection)
 
                 # Associate the album with its parent
                 folder.albums[album_name] = album

@@ -1,7 +1,7 @@
-from typing import List, Union, Dict, Generator
+from typing import List, Union, Dict, Generator, Tuple
 
 from rauth import OAuth1Session
-from requests import HTTPError
+from requests import HTTPError, Response
 
 from ..concurrent_tasks import image_download, image_upload
 from ..disk import ImageOnDisk
@@ -44,26 +44,30 @@ class SmugMugConnection:
             # Switch to use the Test folder
             self._root_folder_uri = f'{self._root_folder_uri}/Test/Test1'
 
-    def request(self, method, url, *args, **kwargs):
+    def request(self, method, url, *args, **kwargs) -> Response:
         try:
             if 'headers' not in kwargs:
                 kwargs['headers'] = self._headers
 
             r = self._session.request(method, url, *args, **kwargs)
             r.raise_for_status()
+
             return r
 
         except HTTPError:
             print(f'Method: {method}, Url: {url}, args: {args}, kwargs: {kwargs}')
             raise
 
-    def request_get(self, relative_uri, *args, **kwargs) -> Dict:
+    def request_get(self, relative_uri: str, *args, **kwargs) -> Dict:
         r = self.request('GET', self._format_url(relative_uri), *args, **kwargs)
         return r.json()['Response']
 
-    def request_post(self, relative_uri, json, *args, **kwargs) -> Dict:
-        r = self.request('POST', self._format_url(relative_uri), json=json, *args, **kwargs)
+    def request_post(self, relative_uri: str, json: Union[Dict, List], *args, **kwargs) -> Dict:
+        r = self.request('POST', self._format_url(relative_uri), *args, json=json, **kwargs)
         return r.json()['Response']
+
+    def request_delete(self, relative_uri: str):
+        self.request('DELETE', self._format_url(relative_uri))
 
     @property
     def root_folder_uri(self) -> str:
@@ -78,18 +82,17 @@ class SmugMugConnection:
         return self._user
 
     def folder_delete(self, folder: 'FolderOnSmugmug'):
-        self.request('DELETE', self._format_url(folder.uri))
+        self.request_delete(folder.uri)
 
     def album_delete(self, album: 'AlbumOnSmugmug'):
-        self.request('DELETE', self._format_url(album.uri))
+        self.request_delete(album.uri)
 
     def image_delete(self, image: 'ImageOnSmugmug'):
-        self.request('DELETE', self._format_url(image.uri))
+        self.request_delete(image.uri)
 
-    def folder_get(self, folder_uri: str = None, with_children: bool = True) -> (dict, List[dict], List[dict]):
+    def folder_get(self, folder_uri: str = None, with_children: bool = True) -> Tuple[Dict, List[Dict], List[Dict]]:
         folder_uri = folder_uri or self._root_folder_uri
 
-        # Get the node
         r = self.request_get(folder_uri)
         folder = r['Folder']
 
@@ -105,7 +108,7 @@ class SmugMugConnection:
 
     def node_create(self,
                     parent_folder: 'FolderOnSmugmug',
-                    node_on_disk: Union['FolderOnDisk', 'AlbumOnDisk']) -> dict:
+                    node_on_disk: Union['FolderOnDisk', 'AlbumOnDisk']) -> Dict:
         """
         Create a new node (either an Album or a Folder) under the parent folder
         """
@@ -116,20 +119,14 @@ class SmugMugConnection:
                               json={
                                   'Name': node_on_disk.name,
                                   'UriName': self._encode_uri_name(node_on_disk.name),
-                                  'Type': object_type,
+                                  'Type': object_type
                               })
 
-        if node_on_disk.is_folder:
-            folder_uri = r['Node']['Uris']['FolderByID']['Uri']
-            node = self.request_get(folder_uri)
-
-        else:
-            album_uri = r['Node']['Uris']['Album']['Uri']
-            node = self.request_get(album_uri)
-
+        uri = r['Node']['Uris']['FolderByID']['Uri'] if node_on_disk.is_folder else r['Node']['Uris']['Album']['Uri']
+        node = self.request_get(uri)
         return node[object_type]
 
-    def album_images_get(self, album_record: dict) -> List[dict]:
+    def album_images_get(self, album_record: Dict) -> List[Dict]:
         return self._get_items(relative_uri=album_record['Uris']['AlbumImages']['Uri'], object_name='AlbumImage')
 
     def image_download(self,
@@ -159,36 +156,34 @@ class SmugMugConnection:
 
         task_pool.apply_async(image_upload, (self, to_album, image_on_disk, image_to_replace,))
 
-    def _iter_items(self, relative_uri, object_name) -> Generator[Dict, None, None]:
+    def _get_items(self, relative_uri: str, object_name: str) -> List[Dict]:
         """
-        Iterate through full list of items (through pagination)
+        Materialized full list of items (through pagination)
         """
-        # Run the initial request
-        response = self.request_get(relative_uri)
 
-        items = response.get(object_name) or []
+        def iter_items() -> Generator[Dict, None, None]:
+            # Run the initial request
+            response = self.request_get(relative_uri)
 
-        # Now check if we need to get more pages, if so, iterate
-        paging = response.get('Pages') or {}
-        total_count = paging.get('Total') or len(items)
-        items_found = 0
+            items = response.get(object_name) or []
 
-        while total_count > items_found:
-            response = self.request_get(relative_uri, params={'start': items_found + 1, 'count': 100})
-            items = response.get(object_name)
-            if items:
-                for item in items:
-                    yield item
-                    items_found += 1
+            # Now check if we need to get more pages, if so, iterate
+            paging = response.get('Pages') or {}
+            total_count = paging.get('Total') or len(items)
+            items_found = 0
 
-    def _get_items(self, relative_uri, object_name) -> List[Dict]:
-        """
-        Query full list of items (through pagination)
-        """
-        return [i for i in self._iter_items(relative_uri=relative_uri, object_name=object_name)]
+            while total_count > items_found:
+                response = self.request_get(relative_uri, params={'start': items_found + 1, 'count': 100})
+                items = response.get(object_name)
+                if items:
+                    for item in items:
+                        yield item
+                        items_found += 1
+
+        return list(iter_items())
 
     @classmethod
-    def _format_url(cls, uri):
+    def _format_url(cls, uri: str) -> str:
         if uri.startswith('/'):
             uri = uri[1:]
 

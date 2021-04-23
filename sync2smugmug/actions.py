@@ -118,8 +118,8 @@ class SyncAlbumsAction(Action):
         self.sync_action = sync_type
 
     def perform(self, dry_run: bool):
-        sync_complete = False
-        changed = False
+        sync_complete: bool = False
+        changed: bool = False
 
         if SyncTypeAction.DOWNLOAD in self.sync_action:
             missing_images = any(i for i in self.smugmug_album.images if i not in self.disk_album)

@@ -28,7 +28,7 @@ class TaskPool:
         if self._pool is None:
             self._pool = Pool(processes=self.PROCESSES)
 
-    def apply_async(self, func: Callable, params: Tuple = (), callback: Callable = None):
+    def apply_async(self, func: Callable, params: Tuple = tuple(), callback: Callable = None):
         with self._cond:
             # Wrap the callback (if provided) with our own for tracking purposes
             idx = len(self._done)

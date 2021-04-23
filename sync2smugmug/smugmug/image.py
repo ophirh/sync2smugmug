@@ -1,10 +1,11 @@
 import os
+from typing import Dict
 
 from ..image import Image
 
 
 class ImageOnSmugmug(Image):
-    def __init__(self, album: 'AlbumOnSmugmug', image_record: dict):
+    def __init__(self, album: 'AlbumOnSmugmug', image_record: Dict):
         super().__init__(album, os.path.join(album.relative_path, image_record['FileName']))
 
         self.record = image_record

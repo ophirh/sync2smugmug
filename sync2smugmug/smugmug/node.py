@@ -46,7 +46,7 @@ class FolderOnSmugmug(Folder):
         return self._connection
 
     @property
-    def record(self) -> dict:
+    def record(self) -> Dict:
         return self._folder_record
 
     @property
@@ -113,12 +113,12 @@ class AlbumOnSmugmug(Album):
     def __init__(self,
                  parent: FolderOnSmugmug,
                  relative_path: str,
-                 record: dict,
-                 smugmug_connection: SmugMugConnection = None):
+                 record: Dict,
+                 connection: SmugMugConnection = None):
         super().__init__('Smug', parent, relative_path)
 
         self._album_record = record
-        self._connection = smugmug_connection or parent.connection
+        self._connection = connection or parent.connection
         self._images = None
 
     @property
@@ -127,7 +127,7 @@ class AlbumOnSmugmug(Album):
         return self._parent
 
     @property
-    def record(self) -> dict:
+    def record(self) -> Dict:
         return self._album_record
 
     @property

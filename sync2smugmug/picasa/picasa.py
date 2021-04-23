@@ -2,9 +2,11 @@ import configparser
 import os
 import struct
 import time
+from typing import List, Dict, Tuple, Optional
+from typing.io import BinaryIO
 
 
-def read_string_field(f):
+def read_string_field(f: BinaryIO) -> str:
     # Read a null terminated string...
     s = b''
 
@@ -16,23 +18,23 @@ def read_string_field(f):
     return s.decode()
 
 
-def read_byte_field(f):
+def read_byte_field(f: BinaryIO):
     return struct.unpack(b'<B', f.read(1))[0]
 
 
-def read_2byte_field(f):
+def read_2byte_field(f: BinaryIO):
     return struct.unpack(b'<H', f.read(2))[0]
 
 
-def read_4byte_field(f):
+def read_4byte_field(f: BinaryIO):
     return struct.unpack(b'<L', f.read(4))[0]
 
 
-def read_8byte_field(f):
+def read_8byte_field(f: BinaryIO):
     return struct.unpack(b'<Q', f.read(8))[0]
 
 
-def read_date_field(f):
+def read_date_field(f: BinaryIO):
     # Read Microsoft Variant (date as a double)
     d = struct.unpack(b'<d', f.read(8))[0]
     d -= 25569
@@ -41,11 +43,11 @@ def read_date_field(f):
 
 
 class PMPReader:
-    def __init__(self, path, table, field):
+    def __init__(self, path: str, table: str, field: str):
         self.path = path
         self.entries = self._read(table, field)
 
-    def _read(self, table, field):
+    def _read(self, table: str, field: str) -> List:
         with open(os.path.join(self.path, f'{table}_{field}.pmp'), 'rb') as f:
             if struct.unpack(b'<I', f.read(4))[0] != 0x3fcccccd:
                 raise IOError('Failed magic1')
@@ -91,11 +93,11 @@ class PMPReader:
 
 
 class ThumbIndexDBReader:
-    def __init__(self, path):
+    def __init__(self, path: str):
         self.path = path
         self.dirs, self.images = self._read()
 
-    def _read(self):
+    def _read(self) -> Tuple[Dict, List[Dict]]:
         with open(os.path.join(self.path, 'thumbindex.db'), 'rb') as f:
             if struct.unpack(b'<I', f.read(4))[0] != 0x40466666:
                 raise IOError('Failed magic')
@@ -104,7 +106,7 @@ class ThumbIndexDBReader:
 
             dirs = {}
             lookup = {}
-            images = []
+            images: List[Dict] = []
 
             # Read the objects first (without trying to link them)
             for i in range(num_of_items):
@@ -143,7 +145,7 @@ class PicasaDB(object):
         self.picasa_db_location = kwargs['picasa_db_location']
         self.thumbs = self._construct_db()
 
-    def _construct_db(self):
+    def _construct_db(self) -> ThumbIndexDBReader:
         thumbs = ThumbIndexDBReader(self.picasa_db_location)
 
         # Pick the interesting fields that we want to collect...
@@ -177,7 +179,7 @@ class PicasaDB(object):
         for d in self.thumbs.dirs.keys():
             print(d)
 
-    def get_image_caption(self, folder: str, name: str) -> str:
+    def get_image_caption(self, folder: str, name: str) -> Optional[str]:
         if not folder.endswith('\\'):
             folder += '\\'
 
@@ -192,7 +194,7 @@ class PicasaAlbum:
     Manages the reading and understanding of the Picasa metadata (stored in INI files) for the given album
     """
 
-    def __init__(self, album_path, files):
+    def __init__(self, album_path: str, files: List):
         self.ini_files = []
 
         if '.picasa.ini' in files:
@@ -216,10 +218,10 @@ class PicasaAlbum:
 
         return None
 
-    def get_album_description(self):
+    def get_album_description(self) -> str:
         return self._get_attribute('Picasa', 'Description')
 
-    def get_album_location(self):
+    def get_album_location(self) -> str:
         return self._get_attribute('Picasa', 'Location')
 
 
