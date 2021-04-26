@@ -162,7 +162,7 @@ class Album(Node):
 
         i = self.last_modified - other.last_modified
         if i != 0:
-            return i
+            return 1 if i > 0 else -1
 
         i = self.image_count - other.image_count
         if i != 0:
