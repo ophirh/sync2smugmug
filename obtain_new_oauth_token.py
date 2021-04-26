@@ -1,4 +1,6 @@
+import json
 import pprint
+from typing import Tuple, List
 from urllib.parse import urlencode, urlunsplit, parse_qsl, urlsplit
 
 from rauth import OAuth1Session, OAuth1Service
@@ -23,12 +25,12 @@ def get_service() -> OAuth1Service:
     return service
 
 
-def add_auth_params(auth_url, access=None, permissions=None):
+def add_auth_params(auth_url: str, access: str = None, permissions: str = None):
     if access is None and permissions is None:
         return auth_url
 
     parts = urlsplit(auth_url)
-    query = parse_qsl(parts.query, True)
+    query: List[Tuple] = parse_qsl(parts.query, True)
     if access is not None:
         query.append(('Access', access))
 
@@ -44,7 +46,7 @@ def main():
     similar in principle to the way any non-web-based application can obtain an
     OAuth authorization from a user.
     """
-    service = get_service()
+    service: OAuth1Service = get_service()
 
     # First, we need a request token and secret, which SmugMug will give us.
     # We are specifying "oob" (out-of-band) as the callback because we don't
@@ -53,13 +55,13 @@ def main():
 
     # Second, we need to give the user the web URL where they can authorize our
     # application.
-    auth_url = add_auth_params(service.get_authorize_url(rt), access='Full', permissions='Modify')
+    auth_url: str = add_auth_params(service.get_authorize_url(rt), access='Full', permissions='Modify')
     print(f'Go to {auth_url} in a web browser.')
 
     # Once the user has authorized our application, they will be given a
     # six-digit verifier code. Our third step is to ask the user to enter that
     # code:
-    verifier = input('Enter the six-digit code: ').strip()
+    verifier: str = input('Enter the six-digit code: ').strip()
 
     # Finally, we can use the verifier code, along with the request token and
     # secret, to sign a request for an access token.
@@ -76,10 +78,11 @@ def main():
                             access_token=at,
                             access_token_secret=ats)
 
-    auth_user = session.get(f'{SmugMugConnection.API_BASE_URL}!authuser', headers={'Accept': 'application/json'}).text
+    auth_user: str = session.get(f'{SmugMugConnection.API_BASE_URL}!authuser',
+                                 headers={'Accept': 'application/json'}).text
 
     print('Auth User:')
-    pprint.pprint(auth_user)
+    pprint.pprint(json.loads(auth_user))
 
 
 if __name__ == '__main__':

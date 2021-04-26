@@ -82,7 +82,7 @@ def parse_config() -> Config:
     arg_parser = configargparse.ArgParser(default_config_files=config_files)
 
     arg_parser.add_argument('--sync',
-                            required=True,
+                            default='online_backup',
                             help='Type of sync to perform',
                             choices=['online_backup',
                                      'online_backup_clean',
