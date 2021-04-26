@@ -141,8 +141,8 @@ class PicasaDB(object):
     Reads the Picasa DB (proprietary format)
     """
 
-    def __init__(self, **kwargs):
-        self.picasa_db_location = kwargs['picasa_db_location']
+    def __init__(self, picasa_db_location: str):
+        self.picasa_db_location = picasa_db_location
         self.thumbs = self._construct_db()
 
     def _construct_db(self) -> ThumbIndexDBReader:
@@ -223,10 +223,3 @@ class PicasaAlbum:
 
     def get_album_location(self) -> str:
         return self._get_attribute('Picasa', 'Location')
-
-
-if __name__ == '__main__':
-    # Test reading the Picasa DB (read the title of images)
-    # print PMPReader(p, 'imagedata', 'caption')).entries
-    print(PicasaDB().get_image_caption('E:\\Pictures\\2014\\2014_05_31 - New England Open Karate',
-                                       'P5310600.MOV'))
