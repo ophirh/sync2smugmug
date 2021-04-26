@@ -44,7 +44,7 @@ class SmugmugScanner:
         Recursively on folders called to dig into Smugmug
         """
 
-        folder_record, sub_folders, albums = self._connection.folder_get(folder_uri=node_uri)
+        folder_record, sub_folders, albums = self._connection.folder_get(folder_uri=node_uri, with_children=True)
 
         folder = FolderOnSmugmug(parent=parent,
                                  relative_path=path,
@@ -52,10 +52,10 @@ class SmugmugScanner:
                                  smugmug_connection=self._connection)
 
         if sub_folders:
-            # Recursively scan folder's children
+            # Recursively scan folder's children (either sub-folders or albums)
             for sub_folder_record in sub_folders:
-                sub_folder_name = sub_folder_record['Name']
-                sub_folder_uri = sub_folder_record['Uri']
+                sub_folder_name: str = sub_folder_record['Name']
+                sub_folder_uri: str = sub_folder_record['Uri']
 
                 if sub_folder_uri == f'{self._connection.root_folder_uri}/Test':
                     # Skip over the test folder (this will be only scratch, visible only to me)
@@ -76,9 +76,9 @@ class SmugmugScanner:
                 folder.image_count += sub_folder.image_count
 
         if albums:
-            # Recursively scan folder's children
+            # Pick up the folder's albums (these are leaves in the tree - and do not have children)
             for album_record in albums:
-                album_name = album_record['Name']
+                album_name: str = album_record['Name']
 
                 album = AlbumOnSmugmug(parent=folder,
                                        relative_path=os.path.join(path, album_name),

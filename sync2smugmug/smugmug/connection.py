@@ -122,7 +122,11 @@ class SmugMugConnection:
                                   'Type': object_type
                               })
 
-        uri = r['Node']['Uris']['FolderByID']['Uri'] if node_on_disk.is_folder else r['Node']['Uris']['Album']['Uri']
+        if node_on_disk.is_folder:
+            uri = r['Node']['Uris']['FolderByID']['Uri']
+        else:
+            uri = r['Node']['Uris']['Album']['Uri']
+
         node = self.request_get(uri)
         return node[object_type]
 
