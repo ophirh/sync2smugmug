@@ -191,7 +191,7 @@ def sync_albums(from_album: Album,
 
     if from_album.shallow_compare(to_album) != 0:
         # Shallow compare shows equality
-        if from_album.deep_compare(to_album) == 0:
+        if from_album.deep_compare(to_album, shallow_compare_first=False) == 0:
             # Objects are really equal. Update sync data to make sure shallow_compare will show equality next time
             need_sync, only_update_sync_data = False, True
 

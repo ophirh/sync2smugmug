@@ -151,39 +151,43 @@ class Album(Node):
 
         i = self.shallow_compare(other)
         if i == 0:
-            i = self.deep_compare(other)
+            i = self.deep_compare(other, shallow_compare_first=False)
 
         return i
 
     def shallow_compare(self, other: 'Album') -> int:
+        i = cmp(self.relative_path, other.relative_path)
+        if i != 0:
+            return i
+
+        i = self.last_modified - other.last_modified
+        if i != 0:
+            return i
+
+        i = self.image_count - other.image_count
+        if i != 0:
+            return i
+
         # TODO: Check change in description and other meta-data attributes
+        return 0
 
-        i = cmp(self.relative_path, other.relative_path)
-        if i == 0:
-            i = self.last_modified - other.last_modified
-
-            if i == 0:
-                i = self.image_count - other.image_count
-
-        return i
-
-    def deep_compare(self, other: 'Album') -> int:
-        # TODO: Compare additional attributes!
-        i = cmp(self.relative_path, other.relative_path)
-        if i == 0:
-            self_images = sorted(self.images, key=lambda k: k.relative_path)
-            other_images = sorted(other.images, key=lambda k: k.relative_path)
-
-            i = len(self_images) - len(other_images)
+    def deep_compare(self, other: 'Album', shallow_compare_first: bool = True) -> int:
+        if shallow_compare_first:
+            i = self.shallow_compare(other)
             if i != 0:
                 return i
 
-            for si, oi in zip(self_images, other_images):
-                i = si.compare(oi)
-                if i != 0:
-                    return i
+        # Compare images - one by one
+        self_images = sorted(self.images, key=lambda k: k.relative_path)
+        other_images = sorted(other.images, key=lambda k: k.relative_path)
 
-        return i
+        for si, oi in zip(self_images, other_images):
+            i = si.compare(oi)
+            if i != 0:
+                return i
+
+        # TODO: More compares?
+        return 0
 
     def delete(self, dry_run: bool):
         raise NotImplementedError()
