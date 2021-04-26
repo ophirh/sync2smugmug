@@ -23,10 +23,10 @@ class AddAction(Action):
 
         self.what_to_add = what_to_add
         self.parent_to_add_to = parent_to_add_to
-        self.message = f'({message})' if message else ''
+        self.message = message or ''
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__} (add {self.what_to_add} to {self.parent_to_add_to} [{self.message}])'
+        return f'{self.__class__.__name__} (add {self.what_to_add} to {self.parent_to_add_to} ({self.message})'
 
     def perform(self, dry_run: bool):
         raise NotImplementedError()
@@ -93,7 +93,7 @@ class UploadAction(AddAction):
         assert isinstance(self.what_to_add, (FolderOnDisk, AlbumOnDisk))
         assert isinstance(self.parent_to_add_to, FolderOnSmugmug)
 
-        logger.info(f'Upload {self.what_to_add} to {self.parent_to_add_to} {self.message}')
+        logger.info(f'Upload {self.what_to_add} to {self.parent_to_add_to} ({self.message})')
 
         if not dry_run:
             self.parent_to_add_to.upload(from_disk_node=self.what_to_add, dry_run=dry_run)
@@ -118,8 +118,8 @@ class SyncAlbumsAction(Action):
         self.sync_action = sync_type
 
     def perform(self, dry_run: bool):
-        sync_complete: bool = False
-        changed: bool = False
+        sync_complete = False
+        changed = False
 
         if SyncTypeAction.DOWNLOAD in self.sync_action:
             missing_images = any(i for i in self.smugmug_album.images if i not in self.disk_album)

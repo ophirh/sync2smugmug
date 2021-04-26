@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Generator, Union
+from typing import List, Dict
 
 from .utils import cmp
 from .image import Image
@@ -139,6 +139,10 @@ class Album(Node):
     def __ge__(self, other):
         return self.compare(other) >= 0
 
+    def __contains__(self, image: Image) -> bool:
+        assert isinstance(image, Image)
+        return any(i for i in self.images if i.relative_path == image.relative_path)
+
     def compare(self, other: 'Album') -> int:
         """
         Same functionality as old __cmp__ or C's strcmp
@@ -181,20 +185,5 @@ class Album(Node):
 
         return i
 
-    def __contains__(self, image: Image) -> bool:
-        assert isinstance(image, Image)
-        return any(i for i in self.images if i.relative_path == image.relative_path)
-
     def delete(self, dry_run: bool):
         raise NotImplementedError()
-
-
-def iter_nodes_in_hierarchy(folder: Folder) -> Generator[Union[Album, Folder], None, None]:
-    for album in folder.albums.values():
-        yield album
-
-    for sub_folder in folder.sub_folders.values():
-        yield sub_folder
-
-        for a in iter_nodes_in_hierarchy(sub_folder):
-            yield a
