@@ -2,7 +2,6 @@ import logging
 import os
 from typing import Dict, Union, Optional
 
-from ..config import config
 from .node import FolderOnDisk, AlbumOnDisk
 from ..node import Node
 from ..utils import timeit
@@ -11,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 class DiskScanner:
-    def __init__(self):
-        self.base_dir = config.base_dir
+    def __init__(self, base_dir: str):
+        self.base_dir = base_dir
 
     @timeit
     def scan(self) -> FolderOnDisk:

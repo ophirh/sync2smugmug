@@ -27,7 +27,7 @@ def scan() -> Tuple[FolderOnDisk, FolderOnSmugmug]:
     Scan both disk and Smugmug to create two virtual trees of both systems
     """
 
-    on_disk = DiskScanner().scan()
+    on_disk = DiskScanner(base_dir=config.base_dir).scan()
     logger.info(f'Scan results (on disk): {on_disk.stats()}')
 
     on_smugmug = SmugmugScanner(account=config.account,
