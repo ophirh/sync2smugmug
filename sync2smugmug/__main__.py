@@ -1,7 +1,4 @@
-from typing import Tuple
-
 from .config import config
-from .policy import SyncType, SyncTypeAction
 from .sync import scan, sync, print_summary
 
 

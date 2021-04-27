@@ -158,6 +158,8 @@ class AlbumOnDisk(Album, OnDisk):
         """
         :param sync_date: sync date
         """
+        logger.debug(f'Update sync date {self}')
+
         sync_data = self._load_sync_data()
         sync_data['sync_date'] = sync_date
         sync_data['disk_date'] = os.path.getmtime(self.disk_path)
@@ -179,9 +181,10 @@ class AlbumOnDisk(Album, OnDisk):
         """
 
         missing_images = [i for i in from_album_on_smugmug.images if i not in self]
-        logger.info(f'Downloading {len(missing_images)} images from {from_album_on_smugmug} to {self}')
 
-        if not dry_run:
+        if missing_images and not dry_run:
+            logger.info(f'Downloading {len(missing_images)} images from {from_album_on_smugmug} to {self}')
+
             results = [
                 from_album_on_smugmug.connection.image_download(to_album=self, image_on_smugmug=image)
                 for image in missing_images

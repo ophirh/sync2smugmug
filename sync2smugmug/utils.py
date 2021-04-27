@@ -1,10 +1,11 @@
 import logging
 import time
 from multiprocessing.pool import Pool
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-_task_pool: Pool = None
+_task_pool: Optional[Pool] = None
 
 
 def get_task_pool() -> Pool:

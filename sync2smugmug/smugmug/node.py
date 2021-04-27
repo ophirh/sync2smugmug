@@ -172,9 +172,10 @@ class AlbumOnSmugmug(Album):
         """
 
         missing_images = [i for i in from_album_on_disk.images if i not in self]
-        logger.info(f'Uploading {len(missing_images)} images from {from_album_on_disk} to {self}')
 
-        if not dry_run:
+        if missing_images and not dry_run:
+            logger.info(f'Uploading {len(missing_images)} images from {from_album_on_disk} to {self}')
+
             results = [
                 self.connection.image_upload(to_album=self, image_on_disk=image)
                 for image in missing_images

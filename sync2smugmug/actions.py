@@ -118,49 +118,25 @@ class SyncAlbumsAction(Action):
         self.sync_action = sync_type
 
     def perform(self, dry_run: bool):
-        sync_complete = False
-        changed = False
-
         if SyncTypeAction.DOWNLOAD in self.sync_action:
-            missing_images = any(i for i in self.smugmug_album.images if i not in self.disk_album)
-            if missing_images:
-                self.disk_album.download_images(from_album_on_smugmug=self.smugmug_album, dry_run=dry_run)
-                sync_complete = True
-                changed = True
+            self.disk_album.download_images(from_album_on_smugmug=self.smugmug_album, dry_run=dry_run)
 
         if SyncTypeAction.UPLOAD in self.sync_action:
-            missing_images = any(i for i in self.disk_album.images if i not in self.smugmug_album)
-            if missing_images:
-                self.smugmug_album.upload_images(from_album_on_disk=self.disk_album, dry_run=dry_run)
-                sync_complete = True
-                changed = True
+            self.smugmug_album.upload_images(from_album_on_disk=self.disk_album, dry_run=dry_run)
 
         if SyncTypeAction.DELETE_ON_DISK in self.sync_action:
             for image_to_delete_on_disk in (i for i in self.disk_album.images if i not in self.smugmug_album):
                 image_to_delete_on_disk.delete(dry_run=dry_run)
-                changed = True
 
             self.disk_album.reload_images()  # Make sure album re-syncs
-
-            sync_complete = True
 
         if SyncTypeAction.DELETE_ON_CLOUD in self.sync_action:
             for image_to_delete_on_smugmug in (i for i in self.smugmug_album.images if i not in self.disk_album):
                 image_to_delete_on_smugmug.delete(dry_run=dry_run)
-                changed = True
 
             self.smugmug_album.reload_images()  # Make sure album re-syncs
 
-            sync_complete = True
-
-        if not changed:
-            # Simply update the sync date so we don't try to sync again
-            logger.info(f'Update sync date {self.disk_album}')
-            self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)
-
-        if sync_complete and not dry_run:
-            # Now that we're done, mark the date of synchronization on album
-            logger.info(f'Update sync date {self.disk_album}')
+        if not dry_run:
             self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)
 
 
@@ -177,6 +153,4 @@ class UpdateAlbumSyncData(Action):
         self.smugmug_album: AlbumOnSmugmug = smugmug_album
 
     def perform(self, dry_run: bool):
-        # Simply update the sync date so we don't try to sync again
-        logger.info(f'Update sync date {self.disk_album}')
         self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)

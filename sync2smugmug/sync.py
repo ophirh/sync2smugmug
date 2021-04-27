@@ -41,33 +41,28 @@ def scan() -> Tuple[FolderOnDisk, FolderOnSmugmug]:
     return on_disk, on_smugmug
 
 
-def sync(on_disk: FolderOnDisk,
-         on_smugmug: FolderOnSmugmug,
-         action_callback: Callable[[Action], None] = None) -> List[Action]:
+def sync(on_disk: FolderOnDisk, on_smugmug: FolderOnSmugmug) -> List[Action]:
     """
     Given scan results, generates a set of actions required to sync between the disk and smugmug
-    If action_callback is provided, it will be called for each action (allowing on the fly sync)
 
     :param on_disk: Root for on disk scans
     :param on_smugmug: Root for on smugmug scans
-    :param action_callback: An optional callback function that is called for each action added
     """
 
     sync_type = config.sync
 
     actions: List[Action] = []
 
-    if action_callback is None:
-        def default_callback(action: Action, _: int = None):
-            # Run action without the wrapper
-            action.perform(config.dry_run)
-            actions.append(action)
-
-        action_callback = default_callback
+    def action_callback(action: Action, _: int = None):
+        """
+        Execute the action and keep track of them
+        """
+        action.perform(config.dry_run)
+        actions.append(action)
 
     generate_sync_actions(on_disk=on_disk,
                           on_smugmug=on_smugmug,
-                          action_callback=action_callback,
+                          callback=action_callback,
                           sync_type=sync_type)
 
     print_summary(on_disk, on_smugmug, actions)
@@ -81,18 +76,8 @@ def recurse_sync_folders(from_folder: Folder,
                          add_action_class: Type[AddAction],
                          remove_action_class: Type[RemoveAction],
                          should_delete: bool,
-                         action_callback: Callable[[Action], None],
+                         callback: Callable[[Action], None],
                          sync_type: Tuple[SyncTypeAction, ...]):
-    """
-    :param from_folder: Root node to compare (main)
-    :param to_folder: Root node to compare (secondary) (can be None)
-    :param parent_of_to_folder: Parent of to_node
-    :param add_action_class:
-    :param remove_action_class:
-    :param should_delete: If True, objects (on 2) will also be deleted if not matched (on 1)
-    :param action_callback: Optional call back for actions
-    :param sync_type
-    """
 
     assert from_folder is not None
 
@@ -107,7 +92,7 @@ def recurse_sync_folders(from_folder: Folder,
         action = add_action_class(what_to_add=from_folder,
                                   parent_to_add_to=parent_of_to_folder,
                                   message='entire folder')
-        action_callback(action)
+        callback(action)
 
         return
 
@@ -123,7 +108,7 @@ def recurse_sync_folders(from_folder: Folder,
                              add_action_class=add_action_class,
                              remove_action_class=remove_action_class,
                              should_delete=should_delete,
-                             action_callback=action_callback,
+                             callback=callback,
                              sync_type=sync_type)
 
     if should_delete:
@@ -137,7 +122,7 @@ def recurse_sync_folders(from_folder: Folder,
 
         for node in delete:
             action = remove_action_class(what_to_remove=node)
-            action_callback(action)
+            callback(action)
 
     # Now go over albums in the same way
     # Recursively apply to sub-folders of from_folder.
@@ -148,7 +133,7 @@ def recurse_sync_folders(from_folder: Folder,
                     to_album=to_album,
                     parent_to_folder=to_folder,
                     add_action_class=add_action_class,
-                    action_callback=action_callback,
+                    callback=callback,
                     sync_type=sync_type)
 
     if should_delete:
@@ -162,14 +147,14 @@ def recurse_sync_folders(from_folder: Folder,
 
         for node in delete:
             action = remove_action_class(what_to_remove=node)
-            action_callback(action)
+            callback(action)
 
 
 def sync_albums(from_album: Album,
                 to_album: Album,
                 parent_to_folder: Folder,
                 add_action_class: Type[AddAction],
-                action_callback: Callable[[Action], None],
+                callback: Callable[[Action], None],
                 sync_type: Tuple[SyncTypeAction, ...]):
     """
     Sync images from both versions of albums
@@ -179,7 +164,7 @@ def sync_albums(from_album: Album,
     if to_album is None:
         logger.debug(f'[+{from_album.source[0]}] {from_album.relative_path}')
         action = add_action_class(what_to_add=from_album, parent_to_add_to=parent_to_folder, message='entire album')
-        action_callback(action)
+        callback(action)
 
         return
 
@@ -213,14 +198,14 @@ def sync_albums(from_album: Album,
                                   smugmug_album=node_on_smugmug,
                                   sync_type=sync_type)
 
-        action_callback(action)
+        callback(action)
 
     elif only_update_sync_data:
         # Simply update the sync data since albums are really the same
         logger.debug(f'[~~] {from_album.relative_path} - Need to update sync data')
 
         action = UpdateAlbumSyncData(disk_album=node_on_disk, smugmug_album=node_on_smugmug)
-        action_callback(action)
+        callback(action)
 
     else:
         logger.debug(f'[==] {from_album.relative_path}')
@@ -229,14 +214,14 @@ def sync_albums(from_album: Album,
 @timeit
 def generate_sync_actions(on_disk: FolderOnDisk,
                           on_smugmug: FolderOnSmugmug,
-                          action_callback: Callable[[Action], None],
+                          callback: Callable[[Action], None],
                           sync_type: Tuple[SyncTypeAction, ...]):
     """
     Given the two scanned views (on disk and on Smugmug), generate a list of actions that will sync the two
 
     :param on_disk: root for hierarchy on disk
     :param on_smugmug: root for hierarchy on Smugmug
-    :param action_callback: Optional call back to be called each time an action is determined
+    :param callback: Optional call back to be called each time an action is determined
     :param sync_type: What to do
     """
     logger.info('Generating diff...')
@@ -248,7 +233,7 @@ def generate_sync_actions(on_disk: FolderOnDisk,
                              add_action_class=UploadAction,
                              remove_action_class=RemoveFromSmugmugAction,
                              should_delete=SyncTypeAction.DELETE_ON_CLOUD in sync_type,
-                             action_callback=action_callback,
+                             callback=callback,
                              sync_type=sync_type)
 
     if SyncTypeAction.DOWNLOAD in sync_type:
@@ -258,7 +243,7 @@ def generate_sync_actions(on_disk: FolderOnDisk,
                              add_action_class=DownloadAction,
                              remove_action_class=RemoveFromDiskAction,
                              should_delete=SyncTypeAction.DELETE_ON_DISK in sync_type,
-                             action_callback=action_callback,
+                             callback=callback,
                              sync_type=sync_type)
 
     logger.info('Done.')
