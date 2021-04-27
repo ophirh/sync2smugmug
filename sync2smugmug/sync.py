@@ -17,7 +17,7 @@ from .disk import DiskScanner, FolderOnDisk, AlbumOnDisk
 from .node import Album, Folder
 from .policy import SyncTypeAction
 from .smugmug import SmugmugScanner, FolderOnSmugmug, AlbumOnSmugmug
-from .utils import TaskPool, timeit
+from .utils import timeit
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +71,6 @@ def sync(on_disk: FolderOnDisk,
                           sync_type=sync_type)
 
     print_summary(on_disk, on_smugmug, actions)
-
-    TaskPool.wait_for_all_tasks()
 
     return actions
 

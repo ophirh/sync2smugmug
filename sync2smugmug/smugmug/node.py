@@ -8,7 +8,6 @@ from .connection import SmugMugConnection
 from .image import ImageOnSmugmug
 from ..disk import FolderOnDisk, AlbumOnDisk
 from ..node import Folder, Album
-from ..utils import TaskPool
 
 logger = logging.getLogger(__name__)
 
@@ -176,11 +175,13 @@ class AlbumOnSmugmug(Album):
         logger.info(f'Uploading {len(missing_images)} images from {from_album_on_disk} to {self}')
 
         if not dry_run:
-            task_pool = TaskPool()
-            for image in missing_images:
-                self.connection.image_upload(task_pool=task_pool, to_album=self, image_on_disk=image)
+            results = [
+                self.connection.image_upload(to_album=self, image_on_disk=image)
+                for image in missing_images
+            ]
 
-            task_pool.join()
+            for t in results:
+                t.get()
 
             logger.debug(f'Album {from_album_on_disk} - Finished downloading')
             from_album_on_disk.update_sync_date(sync_date=from_album_on_disk.last_modified)

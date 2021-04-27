@@ -1,3 +1,4 @@
+from multiprocessing.pool import AsyncResult
 from typing import List, Union, Dict, Generator, Tuple
 
 from rauth import OAuth1Session
@@ -5,7 +6,7 @@ from requests import HTTPError, Response
 
 from ..concurrent_tasks import image_download, image_upload
 from ..disk import ImageOnDisk
-from ..utils import TaskPool
+from ..utils import get_task_pool
 
 
 class SmugMugConnection:
@@ -134,31 +135,26 @@ class SmugMugConnection:
         return self._get_items(relative_uri=album_record['Uris']['AlbumImages']['Uri'], object_name='AlbumImage')
 
     def image_download(self,
-                       task_pool: TaskPool,
                        to_album: 'AlbumOnDisk',
-                       image_on_smugmug: 'ImageOnSmugmug'):
+                       image_on_smugmug: 'ImageOnSmugmug') -> AsyncResult:
         """
         Download a single image from the Album on Smugmug to a folder on disk
         """
-        task_pool.apply_async(image_download, (self, image_on_smugmug, to_album,))
+        return get_task_pool().apply_async(image_download, (self, image_on_smugmug, to_album,))
 
     def image_upload(self,
-                     task_pool: TaskPool,
                      to_album: 'AlbumOnSmugmug',
                      image_on_disk: ImageOnDisk,
-                     image_to_replace: 'ImageOnSmugmug' = None):
+                     image_to_replace: 'ImageOnSmugmug' = None) -> AsyncResult:
         """
         Upload an image to an album
 
-        Uses the special upload API (https://api.smugmug.com/api/v2/doc/reference/upload.html)
-
-        :param task_pool Pool to use
         :param ImageOnDisk image_on_disk: Image to upload
         :param ImageOnSmugmug image_to_replace: Image to replace (optional)
         :param AlbumOnSmugmug to_album: Album to upload to
         """
 
-        task_pool.apply_async(image_upload, (self, to_album, image_on_disk, image_to_replace,))
+        return get_task_pool().apply_async(image_upload, (self, to_album, image_on_disk, image_to_replace,))
 
     def _get_items(self, relative_uri: str, object_name: str) -> List[Dict]:
         """

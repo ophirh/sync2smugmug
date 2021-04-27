@@ -9,7 +9,6 @@ from shutil import rmtree
 from ..config import config
 from ..disk import ImageOnDisk
 from ..node import Folder, Album
-from ..utils import TaskPool
 
 logger = logging.getLogger(__name__)
 
@@ -183,14 +182,14 @@ class AlbumOnDisk(Album, OnDisk):
         logger.info(f'Downloading {len(missing_images)} images from {from_album_on_smugmug} to {self}')
 
         if not dry_run:
-            task_pool = TaskPool()
+            results = [
+                from_album_on_smugmug.connection.image_download(to_album=self, image_on_smugmug=image)
+                for image in missing_images
+            ]
 
-            for image in missing_images:
-                from_album_on_smugmug.connection.image_download(task_pool=task_pool,
-                                                                to_album=self,
-                                                                image_on_smugmug=image)
+            for r in results:
+                r.get()
 
-            task_pool.join()
             logger.info(f'Downloaded {self}')
 
             self.update_sync_date(sync_date=self.last_modified)
