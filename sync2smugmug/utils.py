@@ -19,38 +19,40 @@ class TaskPool:
 
     _pool: Optional[Pool] = None
 
-    def __init__(self, all_done_callback: Optional[Callable[[], None]] = None):
+    def __init__(self):
         self._done: List[bool] = []
-        self._errors: List[Exception] = []
-        self._all_done_callback = all_done_callback
+        self._errors: List[Optional[Exception]] = []
         self._lock = threading.Lock()
 
         if self._pool is None:
             self._pool = Pool(processes=self.PROCESSES)
 
-    def apply_async(self, func: Callable, params: Tuple = tuple(), callback: Callable = None):
+    def apply_async(self,
+                    func: Callable,
+                    params: Tuple = tuple(),
+                    callback: Callable[[object, int], None] = None,
+                    error_callback: Callable[[Exception, int], None] = None):
         with self._lock:
             # Wrap the callback (if provided) with our own for tracking purposes
             idx = len(self._done)
             self._done.append(False)
+            self._errors.append(None)
 
-        def error_callback(err):
-            self.mark_done(idx)
-            self._errors.append(err)
+        def _error_callback(err):
+            self.mark_done(idx, error=err)
             logger.exception(err)
 
-        def tracking_callback(value):
+            if error_callback is not None:
+                error_callback(err, idx)
+
+        def _tracking_callback(value):
             self.mark_done(idx)
 
             if callback is not None:
                 # Call original callback
-                callback(value)
+                callback(value, idx)
 
-            if self._all_done_callback is not None and self.all_done():
-                # All are done, callback
-                self._all_done_callback()
-
-        return self._pool.apply_async(func, params, callback=tracking_callback, error_callback=error_callback)
+        return self._pool.apply_async(func, params, callback=_tracking_callback, error_callback=_error_callback)
 
     @classmethod
     def wait_for_all_tasks(cls):
@@ -67,9 +69,10 @@ class TaskPool:
         assert self.all_done()
         return self._errors
 
-    def mark_done(self, idx):
+    def mark_done(self, idx, error: Exception = None):
         with self._lock:
             self._done[idx] = True
+            self._errors[idx] = error
 
     def all_done(self):
         with self._lock:
@@ -82,7 +85,7 @@ class TaskPool:
         while not self.all_done():
             time.sleep(0.2)
 
-        if self._errors:
+        if any(a is not None for a in self._errors):
             raise Exception('Failed to run all tasks')
 
 

@@ -159,7 +159,6 @@ class SyncAlbumsAction(Action):
             self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)
 
         if sync_complete and not dry_run:
-            # TODO: Do this only if finished downloading / uploading!!!! (use all_done_callback)
             # Now that we're done, mark the date of synchronization on album
             logger.info(f'Update sync date {self.disk_album}')
             self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)

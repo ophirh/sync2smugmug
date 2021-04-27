@@ -58,7 +58,7 @@ def sync(on_disk: FolderOnDisk,
     actions: List[Action] = []
 
     if action_callback is None:
-        def default_callback(action: Action):
+        def default_callback(action: Action, _: int = None):
             # Run action without the wrapper
             action.perform(config.dry_run)
             actions.append(action)
@@ -106,7 +106,9 @@ def recurse_sync_folders(from_folder: Folder,
         assert parent_of_to_folder is not None
 
         logger.debug(f'[+{from_folder.source[0]}] {from_folder.relative_path}')
-        action = add_action_class(what_to_add=from_folder, parent_to_add_to=parent_of_to_folder, message='entire folder')
+        action = add_action_class(what_to_add=from_folder,
+                                  parent_to_add_to=parent_of_to_folder,
+                                  message='entire folder')
         action_callback(action)
 
         return
