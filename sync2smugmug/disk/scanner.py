@@ -4,7 +4,7 @@ from typing import Dict, Union, Optional
 
 from .node import FolderOnDisk, AlbumOnDisk
 from ..node import Node
-from ..utils import timeit
+from ..utils import timeit, scan_tree
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,12 @@ class DiskScanner:
         root = FolderOnDisk(parent=None, relative_path='')
         nodes[os.sep] = root
 
-        for full_dir_path, dirs, files in os.walk(self.base_dir):
-            relative_path = full_dir_path[len(self.base_dir):]
+        for entry in scan_tree(self.base_dir):
+            entry: os.DirEntry
 
-            if self.should_skip(full_path=full_dir_path, relative_path=full_dir_path):
+            relative_path = entry.path[len(self.base_dir):]
+
+            if self.should_skip(entry, relative_path=relative_path):
                 continue
 
             if Node.get_is_root(relative_path):
@@ -53,7 +55,7 @@ class DiskScanner:
                 continue
 
             # Figure out if this is an Album of a Folder
-            if AlbumOnDisk.has_images(full_dir_path):
+            if AlbumOnDisk.has_images(entry.path):
                 node = AlbumOnDisk(parent=parent_node, relative_path=relative_path)
 
                 parent_node.albums[node_name] = node
@@ -77,20 +79,18 @@ class DiskScanner:
         return root
 
     @staticmethod
-    def should_skip(full_path: str, relative_path: str) -> bool:
+    def should_skip(entry: os.DirEntry, relative_path: str) -> bool:
         """
         Figures out which folders should be skipped (special folders that are not meant for upload)
 
-        :param str full_path: Full path to folder
-        :param str relative_path: Relative path to folder
+        :param entry: The entry
+        :param relative_path: Relative path to folder
         """
 
-        basename = os.path.basename(full_path)
-
-        if basename.startswith('.'):
+        if entry.name.startswith('.'):
             return True
 
-        basename = basename.lower()
+        basename = entry.name.lower()
 
         if any(a in basename for a in ('originals', 'lightroom', 'developed')):
             return True

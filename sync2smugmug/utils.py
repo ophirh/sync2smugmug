@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from multiprocessing.pool import Pool
 from typing import Optional
@@ -35,3 +36,16 @@ def timeit(f):
                 logger.info(f'!---- {f.__name__} execution time: {elapsed:.2f} sec ----!')
 
     return timed
+
+
+def scan_tree(path: str):
+    """
+    Recursively yield DirEntry objects for given directory.
+    """
+    for entry in os.scandir(path):
+        entry: os.DirEntry
+
+        yield entry
+
+        if entry.is_dir(follow_symlinks=False):
+            yield from scan_tree(entry.path)  # see below for Python 2.x
