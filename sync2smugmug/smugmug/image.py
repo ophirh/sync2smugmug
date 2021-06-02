@@ -30,6 +30,10 @@ class ImageOnSmugmug(Image):
     def keywords(self) -> str:
         return self.record['Keywords']
 
+    @property
+    def size(self) -> int:
+        return self.record['OriginalSize']
+
     def delete(self, dry_run: bool):
         if not dry_run:
             self.album.connection.image_delete(self)

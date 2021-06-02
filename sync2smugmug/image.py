@@ -44,6 +44,10 @@ class Image:
         _, name = os.path.split(self.relative_path)
         return name
 
+    @property
+    def size(self) -> int:
+        raise NotImplementedError()
+
     def compare(self, other: 'Image') -> int:
         assert isinstance(other, Image)
 
@@ -52,10 +56,8 @@ class Image:
         if i == 0:
             i = cmp(self.caption, other.caption)
 
-#            if i == 0:
-#                i = cmp(self.keywords, other.keywords)
-#                # TODO: Compare more?
-#                pass
+            if i == 0:
+                i = cmp(self.size, other.size)
 
         return i
 

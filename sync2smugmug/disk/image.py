@@ -22,6 +22,10 @@ class ImageOnDisk(Image):
         # TODO: Get the Picasa / LightRoom
         return ''
 
+    @property
+    def size(self) -> int:
+        return os.stat(self.disk_path).st_size
+
     def delete(self, dry_run: bool):
         if not dry_run:
             os.remove(self.disk_path)
