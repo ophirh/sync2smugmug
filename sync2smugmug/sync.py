@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from typing import Tuple, Callable, List, Type, Optional
+from typing import Tuple, Callable, List, Type, Optional, Awaitable
 
 from .actions import (
     Action,
@@ -17,12 +18,12 @@ from .disk import DiskScanner, FolderOnDisk, AlbumOnDisk
 from .node import Album, Folder
 from .policy import SyncTypeAction
 from .smugmug import SmugmugScanner, FolderOnSmugmug, AlbumOnSmugmug
-from .utils import timeit
+from .smugmug.connection import SmugMugConnection
 
 logger = logging.getLogger(__name__)
 
 
-def scan() -> Tuple[FolderOnDisk, FolderOnSmugmug]:
+async def scan(connection: SmugMugConnection) -> Tuple[FolderOnDisk, FolderOnSmugmug]:
     """
     Scan both disk and Smugmug to create two virtual trees of both systems
     """
@@ -30,18 +31,14 @@ def scan() -> Tuple[FolderOnDisk, FolderOnSmugmug]:
     on_disk = DiskScanner(base_dir=config.base_dir).scan()
     logger.info(f'Scan results (on disk): {on_disk.stats()}')
 
-    on_smugmug = SmugmugScanner(account=config.account,
-                                consumer_key=config.consumer_key,
-                                consumer_secret=config.consumer_secret,
-                                access_token=config.access_token,
-                                access_token_secret=config.access_token_secret,
-                                use_test_folder=config.use_test_folder).scan()
+    on_smugmug = await SmugmugScanner(connection=connection).scan()
+
     logger.info(f'Scan results (on smugmug): {on_smugmug.stats()}')
 
     return on_disk, on_smugmug
 
 
-def sync(on_disk: FolderOnDisk, on_smugmug: FolderOnSmugmug) -> List[Action]:
+async def sync(on_disk: FolderOnDisk, on_smugmug: FolderOnSmugmug) -> List[Action]:
     """
     Given scan results, generates a set of actions required to sync between the disk and smugmug
 
@@ -53,32 +50,29 @@ def sync(on_disk: FolderOnDisk, on_smugmug: FolderOnSmugmug) -> List[Action]:
 
     actions: List[Action] = []
 
-    def action_callback(action: Action, _: int = None):
+    async def execute_action(action: Action, _: int = None):
         """
         Execute the action and keep track of them
         """
-        action.perform(config.dry_run)
+        await action.perform(config.dry_run)
         actions.append(action)
 
-    generate_sync_actions(on_disk=on_disk,
-                          on_smugmug=on_smugmug,
-                          callback=action_callback,
-                          sync_type=sync_type)
-
-    print_summary(on_disk, on_smugmug, actions)
+    await generate_sync_actions(on_disk=on_disk,
+                                on_smugmug=on_smugmug,
+                                execute_action=execute_action,
+                                sync_type=sync_type)
 
     return actions
 
 
-def recurse_sync_folders(from_folder: Folder,
-                         to_folder: Folder,
-                         parent_of_to_folder: Optional[Folder],
-                         add_action_class: Type[AddAction],
-                         remove_action_class: Type[RemoveAction],
-                         should_delete: bool,
-                         callback: Callable[[Action], None],
-                         sync_type: Tuple[SyncTypeAction, ...]):
-
+async def recurse_sync_folders(from_folder: Folder,
+                               to_folder: Folder,
+                               parent_of_to_folder: Optional[Folder],
+                               add_action_class: Type[AddAction],
+                               remove_action_class: Type[RemoveAction],
+                               should_delete: bool,
+                               execute_action: Callable[[Action], Awaitable[None]],
+                               sync_type: Tuple[SyncTypeAction, ...]):
     assert from_folder is not None
 
     if not from_folder.is_root and from_folder.parent.is_root:
@@ -92,70 +86,77 @@ def recurse_sync_folders(from_folder: Folder,
         action = add_action_class(what_to_add=from_folder,
                                   parent_to_add_to=parent_of_to_folder,
                                   message='entire folder')
-        callback(action)
+        await execute_action(action)
 
         return
 
     assert from_folder.relative_path == to_folder.relative_path
 
+    tasks = []
+
     # Recursively apply to sub-folders of from_folder.
     for name, from_sub_folder in from_folder.sub_folders.items():
         to_sub_folder = to_folder.sub_folders.get(name)
 
-        recurse_sync_folders(from_folder=from_sub_folder,
-                             to_folder=to_sub_folder,
-                             parent_of_to_folder=to_folder,
-                             add_action_class=add_action_class,
-                             remove_action_class=remove_action_class,
-                             should_delete=should_delete,
-                             callback=callback,
-                             sync_type=sync_type)
+        # Intentionally limit concurrency here...
+        await recurse_sync_folders(from_folder=from_sub_folder,
+                                   to_folder=to_sub_folder,
+                                   parent_of_to_folder=to_folder,
+                                   add_action_class=add_action_class,
+                                   remove_action_class=remove_action_class,
+                                   should_delete=should_delete,
+                                   execute_action=execute_action,
+                                   sync_type=sync_type)
 
     if should_delete:
-        delete = []
+        delete_tasks = []
 
         # If delete is required, delete all children of 'to_node' that do not exist in 'from_node'
         for name, to_sub_folder in to_folder.sub_folders.items():
             if name not in from_folder.sub_folders:
                 logger.debug(f'[-{to_sub_folder.source[0]}] {to_sub_folder.relative_path}')
-                delete.append(to_sub_folder)
+                delete_tasks.append(
+                    asyncio.create_task(execute_action(remove_action_class(what_to_remove=to_sub_folder))))
 
-        for node in delete:
-            action = remove_action_class(what_to_remove=node)
-            callback(action)
+        await asyncio.gather(*delete_tasks)
+
+    sync_tasks = []
 
     # Now go over albums in the same way
-    # Recursively apply to sub-folders of from_folder.
     for name, from_album in from_folder.albums.items():
+        if from_album.image_count == 0:
+            continue
+
         to_album = to_folder.albums.get(name)
 
-        sync_albums(from_album=from_album,
-                    to_album=to_album,
-                    parent_to_folder=to_folder,
-                    add_action_class=add_action_class,
-                    callback=callback,
-                    sync_type=sync_type)
+        await sync_albums(from_album=from_album,
+                          to_album=to_album,
+                          parent_to_folder=to_folder,
+                          add_action_class=add_action_class,
+                          execute_action=execute_action,
+                          sync_type=sync_type)
+
+    await asyncio.gather(*sync_tasks)
 
     if should_delete:
-        delete = []
+        delete_tasks = []
 
         # If delete is required, delete all children of 'to_node' that do not exist in 'from_node'
         for name, to_album in to_folder.albums.items():
             if name not in from_folder.albums:
                 logger.debug(f'[-{to_album.source[0]}] {to_album.relative_path}')
-                delete.append(to_album)
+                action = remove_action_class(what_to_remove=to_album)
+                delete_tasks.append(asyncio.create_task(execute_action(action)))
 
-        for node in delete:
-            action = remove_action_class(what_to_remove=node)
-            callback(action)
+        await asyncio.gather(*delete_tasks)
 
 
-def sync_albums(from_album: Album,
-                to_album: Album,
-                parent_to_folder: Folder,
-                add_action_class: Type[AddAction],
-                callback: Callable[[Action], None],
-                sync_type: Tuple[SyncTypeAction, ...]):
+async def sync_albums(from_album: Album,
+                      to_album: Album,
+                      parent_to_folder: Folder,
+                      add_action_class: Type[AddAction],
+                      execute_action: Callable[[Action], Awaitable[None]],
+                      sync_type: Tuple[SyncTypeAction, ...]):
     """
     Sync images from both versions of albums
     """
@@ -163,8 +164,11 @@ def sync_albums(from_album: Album,
 
     if to_album is None:
         logger.debug(f'[+{from_album.source[0]}] {from_album.relative_path}')
-        action = add_action_class(what_to_add=from_album, parent_to_add_to=parent_to_folder, message='entire album')
-        callback(action)
+
+        action = add_action_class(what_to_add=from_album,
+                                  parent_to_add_to=parent_to_folder,
+                                  message='entire album')
+        await execute_action(action)
 
         return
 
@@ -176,7 +180,7 @@ def sync_albums(from_album: Album,
 
     if from_album.shallow_compare(to_album) != 0:
         # Shallow compare shows equality
-        if from_album.deep_compare(to_album, shallow_compare_first=False) == 0:
+        if await from_album.deep_compare(to_album, shallow_compare_first=False) == 0:
             # Objects are really equal. Update sync data to make sure shallow_compare will show equality next time
             need_sync, only_update_sync_data = False, True
 
@@ -198,53 +202,52 @@ def sync_albums(from_album: Album,
                                   smugmug_album=node_on_smugmug,
                                   sync_type=sync_type)
 
-        callback(action)
+        await execute_action(action)
 
     elif only_update_sync_data:
         # Simply update the sync data since albums are really the same
         logger.debug(f'[~~] {from_album.relative_path} - Need to update sync data')
 
         action = UpdateAlbumSyncData(disk_album=node_on_disk, smugmug_album=node_on_smugmug)
-        callback(action)
+        await execute_action(action)
 
     else:
         logger.debug(f'[==] {from_album.relative_path}')
 
 
-@timeit
-def generate_sync_actions(on_disk: FolderOnDisk,
-                          on_smugmug: FolderOnSmugmug,
-                          callback: Callable[[Action], None],
-                          sync_type: Tuple[SyncTypeAction, ...]):
+async def generate_sync_actions(on_disk: FolderOnDisk,
+                                on_smugmug: FolderOnSmugmug,
+                                execute_action: Callable[[Action], Awaitable[None]],
+                                sync_type: Tuple[SyncTypeAction, ...]):
     """
     Given the two scanned views (on disk and on Smugmug), generate a list of actions that will sync the two
 
     :param on_disk: root for hierarchy on disk
     :param on_smugmug: root for hierarchy on Smugmug
-    :param callback: Optional call back to be called each time an action is determined
+    :param execute_action: Optional call back to be called each time an action is determined
     :param sync_type: What to do
     """
     logger.info('Generating diff...')
 
     if SyncTypeAction.UPLOAD in sync_type:
-        recurse_sync_folders(from_folder=on_disk,
-                             to_folder=on_smugmug,
-                             parent_of_to_folder=None,
-                             add_action_class=UploadAction,
-                             remove_action_class=RemoveFromSmugmugAction,
-                             should_delete=SyncTypeAction.DELETE_ON_CLOUD in sync_type,
-                             callback=callback,
-                             sync_type=sync_type)
+        await recurse_sync_folders(from_folder=on_disk,
+                                   to_folder=on_smugmug,
+                                   parent_of_to_folder=None,
+                                   add_action_class=UploadAction,
+                                   remove_action_class=RemoveFromSmugmugAction,
+                                   should_delete=SyncTypeAction.DELETE_ON_CLOUD in sync_type,
+                                   execute_action=execute_action,
+                                   sync_type=sync_type)
 
     if SyncTypeAction.DOWNLOAD in sync_type:
-        recurse_sync_folders(from_folder=on_smugmug,
-                             to_folder=on_disk,
-                             parent_of_to_folder=None,
-                             add_action_class=DownloadAction,
-                             remove_action_class=RemoveFromDiskAction,
-                             should_delete=SyncTypeAction.DELETE_ON_DISK in sync_type,
-                             callback=callback,
-                             sync_type=sync_type)
+        await recurse_sync_folders(from_folder=on_smugmug,
+                                   to_folder=on_disk,
+                                   parent_of_to_folder=None,
+                                   add_action_class=DownloadAction,
+                                   remove_action_class=RemoveFromDiskAction,
+                                   should_delete=SyncTypeAction.DELETE_ON_DISK in sync_type,
+                                   execute_action=execute_action,
+                                   sync_type=sync_type)
 
     logger.info('Done.')
 

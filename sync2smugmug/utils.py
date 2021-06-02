@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -49,3 +50,13 @@ def scan_tree(path: str):
 
         if entry.is_dir(follow_symlinks=False):
             yield from scan_tree(entry.path)  # see below for Python 2.x
+
+
+def async_partial(f, *args):
+    async def f2(*args2):
+        result = f(*args, *args2)
+        if asyncio.iscoroutinefunction(f):
+            result = await result
+        return result
+
+    return f2

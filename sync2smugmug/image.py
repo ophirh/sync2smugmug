@@ -17,13 +17,16 @@ class Image:
         return self._album
 
     @classmethod
-    def is_image(cls, f) -> bool:
+    def is_image(cls, path: str, f: str) -> bool:
         _, ext = os.path.splitext(f)
         # Unknown file types: '.3gp',
-        return ext.lower() in ('.jpg', '.jpeg', '.avi', '.mv4', '.mov', '.mp4', '.mts')
+        if ext.lower() not in ('.jpg', '.jpeg', '.avi', '.mv4', '.mov', '.mp4', '.mts'):
+            return False
+
+        return os.stat(os.path.join(path, f)).st_size > 0
 
     @classmethod
-    def is_raw_image(cls, f) -> bool:
+    def is_raw_image(cls, f: str) -> bool:
         _, ext = os.path.splitext(f)
         # Unknown file types: '.3gp',
         return ext.lower() in ('.orf', '.crw', '.cr2', '.nef', '.raw', '.dng')

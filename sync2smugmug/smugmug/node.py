@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import logging
 from typing import Optional, Dict, List, Union
@@ -64,9 +65,9 @@ class FolderOnSmugmug(Folder):
         folder_modified = self.record['DateModified']  # u'2014-03-01T22:12:13+00:00'
         return dp.parse(folder_modified).timestamp()
 
-    def upload(self,
-               from_disk_node: Union['FolderOnDisk', 'AlbumOnDisk'],
-               dry_run: bool) -> Union['FolderOnSmugmug', 'AlbumOnSmugmug']:
+    async def upload(self,
+                     from_disk_node: Union['FolderOnDisk', 'AlbumOnDisk'],
+                     dry_run: bool) -> Union['FolderOnSmugmug', 'AlbumOnSmugmug']:
         """
         Upload a disk node (folder / album) to smugmug as a child to this object
 
@@ -74,38 +75,49 @@ class FolderOnSmugmug(Folder):
         """
 
         # Create the folder/album on smugmug and return the record
-        new_node_record = \
-            self.connection.node_create(parent_folder=self, node_on_disk=from_disk_node) if not dry_run else {}
-
         if from_disk_node.is_folder:
+            if not dry_run:
+                new_node_record = await self.connection.folder_create(parent_folder=self, folder_on_disk=from_disk_node)
+            else:
+                new_node_record = {}
+
             # Create a folder object from this record
             new_node = FolderOnSmugmug(parent=self,
                                        relative_path=from_disk_node.relative_path,
                                        record=new_node_record)
             self.sub_folders[new_node.relative_path] = new_node
 
+            tasks = []
+
             sub_node: Union['FolderOnDisk', 'AlbumOnDisk']
             for sub_node in itertools.chain(from_disk_node.albums.values(), from_disk_node.sub_folders.values()):
-                new_node.upload(from_disk_node=sub_node, dry_run=dry_run)
+                tasks.append(asyncio.create_task(new_node.upload(from_disk_node=sub_node, dry_run=dry_run)))
+
+            await asyncio.gather(*tasks)
 
         else:
+            if not dry_run:
+                new_node_record = await self.connection.album_create(parent_folder=self, album_on_disk=from_disk_node)
+            else:
+                new_node_record = {}
+
             new_node = AlbumOnSmugmug(parent=self,
                                       relative_path=from_disk_node.relative_path,
                                       record=new_node_record)
             self.albums[new_node.relative_path] = new_node
 
             # Upload the images for this album
-            new_node.upload_images(from_album_on_disk=from_disk_node, dry_run=dry_run)
+            await new_node.upload_images(from_album_on_disk=from_disk_node, dry_run=dry_run)
 
         return new_node
 
-    def delete(self, dry_run: bool):
+    async def delete(self, dry_run: bool):
         # Remove the album from the virtual tree
         if self.name in self.parent.sub_folders:
             del self.parent.sub_folders[self.name]
 
         if not dry_run:
-            self.connection.folder_delete(self)
+            await self.connection.folder_delete(self)
 
 
 class AlbumOnSmugmug(Album):
@@ -151,11 +163,10 @@ class AlbumOnSmugmug(Album):
         # Parse UTC date string and return timestamp
         return max(album_date_modified, images_date_modified)
 
-    @property
-    def images(self) -> List[ImageOnSmugmug]:
+    async def get_images(self) -> List[ImageOnSmugmug]:
         if self._images is None:
-            self._images = [ImageOnSmugmug(album=self, image_record=image)
-                            for image in self.connection.album_images_get(self.record)]
+            image_records = await self.connection.album_images_get(self.record)
+            self._images = [ImageOnSmugmug(album=self, image_record=image) for image in image_records]
 
         return self._images
 
@@ -166,33 +177,34 @@ class AlbumOnSmugmug(Album):
     def image_count(self) -> int:
         return self.record['ImageCount']
 
-    def upload_images(self, from_album_on_disk: AlbumOnDisk, dry_run: bool):
+    async def upload_images(self, from_album_on_disk: AlbumOnDisk, dry_run: bool):
         """
         Upload missing images for an album
         """
 
-        missing_images = [i for i in from_album_on_disk.images if i not in self]
+        my_images = await self.get_images()
+        disk_images = await from_album_on_disk.get_images()
+        missing_images = [i for i in disk_images if i not in my_images]
 
         if missing_images and not dry_run:
             logger.info(f'Uploading {len(missing_images)} images from {from_album_on_disk} to {self}')
 
-            results = [
-                self.connection.image_upload(to_album=self, image_on_disk=image)
+            tasks = [
+                asyncio.create_task(self.connection.image_upload(to_album=self, image_on_disk=image))
                 for image in missing_images
             ]
 
-            for t in results:
-                t.get()
+            await asyncio.gather(*tasks)
 
             logger.debug(f'Album {from_album_on_disk} - Finished downloading')
             from_album_on_disk.update_sync_date(sync_date=from_album_on_disk.last_modified)
 
             self.reload_images()
 
-    def delete(self, dry_run: bool):
+    async def delete(self, dry_run: bool):
         # Remove the album from the virtual tree
         if self.name in self.parent.albums:
             del self.parent.albums[self.name]
 
         if not dry_run:
-            self.connection.album_delete(self)
+            await self.connection.album_delete(self)

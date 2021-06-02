@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Union, Tuple
 
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class Action:
-    def perform(self, dry_run: bool):
+    async def perform(self, dry_run: bool):
         raise NotImplementedError()
 
     def __repr__(self) -> str:
@@ -28,7 +29,7 @@ class AddAction(Action):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__} (add {self.what_to_add} to {self.parent_to_add_to} ({self.message})'
 
-    def perform(self, dry_run: bool):
+    async def perform(self, dry_run: bool):
         raise NotImplementedError()
 
 
@@ -41,10 +42,10 @@ class RemoveAction(Action):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__} (remove {self.what_to_remove})'
 
-    def perform(self, dry_run: bool):
+    async def perform(self, dry_run: bool):
         # Simply delete the subtree
         logger.info(f'Delete {self.what_to_remove}')
-        self.what_to_remove.delete(dry_run=dry_run)
+        await self.what_to_remove.delete(dry_run=dry_run)
 
 
 class RemoveFromDiskAction(RemoveAction):
@@ -66,14 +67,14 @@ class DownloadAction(AddAction):
         """
         super().__init__(what_to_add, parent_to_add_to, message)
 
-    def perform(self, dry_run: bool):
+    async def perform(self, dry_run: bool):
         """
         Download the entire subtree indicated by self.smugmug_node to the disk
         """
         assert isinstance(self.what_to_add, (FolderOnSmugmug, AlbumOnSmugmug))
         assert isinstance(self.parent_to_add_to, FolderOnDisk)
 
-        self.parent_to_add_to.download(from_smugmug_node=self.what_to_add, dry_run=dry_run)
+        await self.parent_to_add_to.download(from_smugmug_node=self.what_to_add, dry_run=dry_run)
 
 
 class UploadAction(AddAction):
@@ -89,14 +90,14 @@ class UploadAction(AddAction):
         """
         super().__init__(what_to_add, parent_to_add_to, message)
 
-    def perform(self, dry_run: bool):
+    async def perform(self, dry_run: bool):
         assert isinstance(self.what_to_add, (FolderOnDisk, AlbumOnDisk))
         assert isinstance(self.parent_to_add_to, FolderOnSmugmug)
 
         logger.info(f'Upload {self.what_to_add} to {self.parent_to_add_to} ({self.message})')
 
         if not dry_run:
-            self.parent_to_add_to.upload(from_disk_node=self.what_to_add, dry_run=dry_run)
+            await self.parent_to_add_to.upload(from_disk_node=self.what_to_add, dry_run=dry_run)
 
 
 class SyncAlbumsAction(Action):
@@ -117,22 +118,31 @@ class SyncAlbumsAction(Action):
         self.smugmug_album = smugmug_album
         self.sync_action = sync_type
 
-    def perform(self, dry_run: bool):
+    async def perform(self, dry_run: bool):
         if SyncTypeAction.DOWNLOAD in self.sync_action:
-            self.disk_album.download_images(from_album_on_smugmug=self.smugmug_album, dry_run=dry_run)
+            await self.disk_album.download_images(from_album_on_smugmug=self.smugmug_album, dry_run=dry_run)
 
         if SyncTypeAction.UPLOAD in self.sync_action:
-            self.smugmug_album.upload_images(from_album_on_disk=self.disk_album, dry_run=dry_run)
+            await self.smugmug_album.upload_images(from_album_on_disk=self.disk_album, dry_run=dry_run)
 
         if SyncTypeAction.DELETE_ON_DISK in self.sync_action:
-            for image_to_delete_on_disk in (i for i in self.disk_album.images if i not in self.smugmug_album):
-                image_to_delete_on_disk.delete(dry_run=dry_run)
+            tasks = []
+            for image_to_delete_on_disk in await self.disk_album.get_images():
+                if not self.smugmug_album.contains_image(image_to_delete_on_disk):
+                    tasks.append(asyncio.create_task(image_to_delete_on_disk.delete(dry_run=dry_run)))
+
+            await asyncio.gather(*tasks)
 
             self.disk_album.reload_images()  # Make sure album re-syncs
 
         if SyncTypeAction.DELETE_ON_CLOUD in self.sync_action:
-            for image_to_delete_on_smugmug in (i for i in self.smugmug_album.images if i not in self.disk_album):
-                image_to_delete_on_smugmug.delete(dry_run=dry_run)
+            tasks = []
+
+            for image_to_delete_on_smugmug in await self.smugmug_album.get_images():
+                if not self.disk_album.contains_image(image_to_delete_on_smugmug):
+                    tasks.append(asyncio.create_task(image_to_delete_on_smugmug.delete(dry_run=dry_run)))
+
+            await asyncio.gather(tasks)
 
             self.smugmug_album.reload_images()  # Make sure album re-syncs
 
@@ -152,5 +162,5 @@ class UpdateAlbumSyncData(Action):
         self.disk_album: AlbumOnDisk = disk_album
         self.smugmug_album: AlbumOnSmugmug = smugmug_album
 
-    def perform(self, dry_run: bool):
+    async def perform(self, dry_run: bool):
         self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)

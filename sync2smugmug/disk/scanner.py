@@ -55,7 +55,7 @@ class DiskScanner:
                 continue
 
             # Figure out if this is an Album of a Folder
-            if AlbumOnDisk.has_images(entry.path):
+            if AlbumOnDisk.has_images(entry.path):  # An album has images
                 node = AlbumOnDisk(parent=parent_node, relative_path=relative_path)
 
                 parent_node.albums[node_name] = node
@@ -64,7 +64,7 @@ class DiskScanner:
                 root.album_count += 1
                 root.image_count += node.image_count
 
-            else:
+            elif FolderOnDisk.has_sub_folders(entry.path):  # A folder has sub-folders
                 node = FolderOnDisk(parent=parent_node, relative_path=relative_path)
 
                 parent_node.sub_folders[node_name] = node
@@ -73,6 +73,11 @@ class DiskScanner:
                 root.folder_count += 1 + node.folder_count
                 root.album_count += node.album_count
                 root.image_count += node.image_count
+
+            else:
+                # Skip empty dirs
+                logger.debug(f'Empty directory {entry.path}')
+                continue
 
             nodes[relative_path] = node
 
@@ -86,6 +91,9 @@ class DiskScanner:
         :param entry: The entry
         :param relative_path: Relative path to folder
         """
+
+        if not entry.is_dir():
+            return True
 
         if entry.name.startswith('.'):
             return True

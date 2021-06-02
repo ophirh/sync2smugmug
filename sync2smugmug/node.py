@@ -116,32 +116,16 @@ class Album(Node):
     def is_album(self) -> bool:
         return True
 
-    @property
-    def images(self) -> List[Image]:
+    async def get_images(self) -> List[Image]:
         raise NotImplementedError()
 
     @property
     def image_count(self) -> int:
-        return len(self.images)
+        raise NotImplementedError()
 
-    def __eq__(self, other):
-        return self.compare(other) == 0
-
-    def __lt__(self, other):
-        return self.compare(other) < 0
-
-    def __le__(self, other):
-        return self.compare(other) <= 0
-
-    def __gt__(self, other):
-        return self.compare(other) > 0
-
-    def __ge__(self, other):
-        return self.compare(other) >= 0
-
-    def __contains__(self, image: Image) -> bool:
+    async def contains_image(self, image: Image) -> bool:
         assert isinstance(image, Image)
-        return any(i for i in self.images if i.relative_path == image.relative_path)
+        return any(i for i in await self.get_images() if i.relative_path == image.relative_path)
 
     def compare(self, other: 'Album') -> int:
         """
@@ -171,15 +155,18 @@ class Album(Node):
         # TODO: Check change in description and other meta-data attributes
         return 0
 
-    def deep_compare(self, other: 'Album', shallow_compare_first: bool = True) -> int:
+    async def deep_compare(self, other: 'Album', shallow_compare_first: bool = True) -> int:
         if shallow_compare_first:
             i = self.shallow_compare(other)
             if i != 0:
                 return i
 
         # Compare images - one by one
-        self_images = sorted(self.images, key=lambda k: k.relative_path)
-        other_images = sorted(other.images, key=lambda k: k.relative_path)
+        self_images = sorted(await self.get_images(), key=lambda k: k.relative_path)
+        other_images = sorted(await other.get_images(), key=lambda k: k.relative_path)
+
+        if len(self_images) != len(other_images):
+            return len(self_images) - len(other_images)
 
         for si, oi in zip(self_images, other_images):
             i = si.compare(oi)

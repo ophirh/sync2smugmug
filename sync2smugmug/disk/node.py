@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import json
 import logging
@@ -56,9 +57,13 @@ class FolderOnDisk(Folder, OnDisk):
     def last_modified(self) -> float:
         return os.path.getmtime(self.disk_path)
 
-    def download(self,
-                 from_smugmug_node: Union['AlbumOnSmugmug', 'FolderOnSmugmug'],
-                 dry_run: bool) -> Union['AlbumOnDisk', 'FolderOnDisk']:
+    @classmethod
+    def has_sub_folders(cls, disk_path: str) -> bool:
+        return any(entry.is_dir() for entry in os.scandir(disk_path))
+
+    async def download(self,
+                       from_smugmug_node: Union['AlbumOnSmugmug', 'FolderOnSmugmug'],
+                       dry_run: bool) -> Union['AlbumOnDisk', 'FolderOnDisk']:
         """
         Download to disk a smugmug node (folder / album) as a child to this object
 
@@ -73,9 +78,13 @@ class FolderOnDisk(Folder, OnDisk):
                                     relative_path=from_smugmug_node.relative_path,
                                     makedirs=True)
 
+            tasks = []
+
             sub_node_on_smugmug: Union['FolderOnSmugmug', 'AlbumOnSmugmug']
             for sub_node in itertools.chain(from_smugmug_node.albums.values(), from_smugmug_node.sub_folders.values()):
-                new_node.download(from_smugmug_node=sub_node, dry_run=dry_run)
+                tasks.append(asyncio.create_task(new_node.download(from_smugmug_node=sub_node, dry_run=dry_run)))
+
+            await asyncio.gather(*tasks)
 
             self.sub_folders[new_node.relative_path] = new_node
 
@@ -85,7 +94,7 @@ class FolderOnDisk(Folder, OnDisk):
                                    makedirs=True)
 
             # Upload the images for this album
-            new_node.download_images(from_album_on_smugmug=from_smugmug_node, dry_run=dry_run)
+            await new_node.download_images(from_album_on_smugmug=from_smugmug_node, dry_run=dry_run)
 
             self.albums[new_node.relative_path] = new_node
 
@@ -107,12 +116,14 @@ class AlbumOnDisk(Album, OnDisk):
         return self._parent
 
     @property
-    def images(self) -> List[ImageOnDisk]:
+    def image_count(self) -> int:
+        return len([e for e in os.scandir(self.disk_path) if ImageOnDisk.is_image(self.disk_path, e.name)])
+
+    async def get_images(self) -> List[ImageOnDisk]:
         if self._images is None:
             # Lazy initialize images
-            self._images = [ImageOnDisk(album=self,
-                                        relative_path=os.path.join(self.relative_path, f))
-                            for f in os.listdir(self.disk_path) if ImageOnDisk.is_image(f)]
+            self._images = [ImageOnDisk(album=self, relative_path=os.path.join(self.relative_path, f))
+                            for f in os.listdir(self.disk_path) if ImageOnDisk.is_image(self.disk_path, f)]
 
         return self._images
 
@@ -138,7 +149,7 @@ class AlbumOnDisk(Album, OnDisk):
 
     @classmethod
     def has_images(cls, disk_path: str) -> bool:
-        return any(True for f in os.listdir(disk_path) if ImageOnDisk.is_image(f))
+        return any(True for f in os.listdir(disk_path) if ImageOnDisk.is_image(disk_path, f))
 
     def _load_sync_data(self) -> Dict:
         p = os.path.join(self.disk_path, SYNC_DATA_FILENAME)
@@ -172,7 +183,7 @@ class AlbumOnDisk(Album, OnDisk):
         if os.path.exists(p):
             os.remove(p)
 
-    def download_images(self, from_album_on_smugmug: 'AlbumOnSmugmug', dry_run: bool):
+    async def download_images(self, from_album_on_smugmug: 'AlbumOnSmugmug', dry_run: bool):
         """
         Download missing images from the album on smugmug to the disk
 
@@ -180,18 +191,18 @@ class AlbumOnDisk(Album, OnDisk):
         :param dry_run: If True, will not actually download anything
         """
 
-        missing_images = [i for i in from_album_on_smugmug.images if i not in self]
+        missing_images = [i for i in await from_album_on_smugmug.get_images() if not await self.contains_image(i)]
 
         if missing_images and not dry_run:
             logger.info(f'Downloading {len(missing_images)} images from {from_album_on_smugmug} to {self}')
 
-            results = [
-                from_album_on_smugmug.connection.image_download(to_album=self, image_on_smugmug=image)
+            tasks = [
+                asyncio.create_task(from_album_on_smugmug.connection.image_download(to_album=self,
+                                                                                    image_on_smugmug=image))
                 for image in missing_images
             ]
 
-            for r in results:
-                r.get()
+            await asyncio.gather(*tasks)
 
             logger.info(f'Downloaded {self}')
 
