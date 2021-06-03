@@ -279,7 +279,8 @@ class SmugMugConnection(BaseSmugMugConnection):
         """
 
         try:
-            logger.debug(f'Uploading {image_on_disk}')
+            action = 'Upload' if image_to_replace is None else 'Replace'
+            logger.debug(f'{action} {image_on_disk}')
 
             # Read the entire file into memory for multipart upload (and for the oauth signature to work)
             with open(image_on_disk.disk_path, 'rb') as f:
@@ -316,7 +317,7 @@ class SmugMugConnection(BaseSmugMugConnection):
             #                                   headers=headers)
             #     r.raise_for_status()
 
-            logger.info(f'Uploaded {image_on_disk}')
+            logger.info(f'{action}ed {image_on_disk}')
 
         except HTTPError:
             logger.exception(f'Failed to upload {image_on_disk}')
