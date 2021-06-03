@@ -48,21 +48,18 @@ class Image:
     def size(self) -> int:
         raise NotImplementedError()
 
+    def delete(self, dry_run: bool):
+        raise NotImplementedError()
+
     def compare(self, other: 'Image') -> int:
         assert isinstance(other, Image)
 
         i = cmp(self.relative_path, other.relative_path)
 
         if i == 0:
-            i = cmp(self.caption, other.caption)
-
-            if i == 0:
-                i = cmp(self.size, other.size)
+            i = cmp(self.size, other.size)
 
         return i
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__} {self.relative_path}'
-
-    def delete(self, dry_run: bool):
-        raise NotImplementedError()

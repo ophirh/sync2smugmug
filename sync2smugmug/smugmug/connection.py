@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import hashlib
 from multiprocessing.pool import AsyncResult
 from typing import List, Union, Dict, Generator, Tuple
 
@@ -280,21 +281,22 @@ class SmugMugConnection(BaseSmugMugConnection):
         try:
             logger.debug(f'Uploading {image_on_disk}')
 
+            # Read the entire file into memory for multipart upload (and for the oauth signature to work)
+            with open(image_on_disk.disk_path, 'rb') as f:
+                image_data = f.read()
+
             headers = {
                 'X-Smug-AlbumUri': to_album.album_uri,
                 'X-Smug-Title': image_on_disk.name,
-                'X-Smug-Caption': image_on_disk.caption,
+                'X-Smug-Caption': image_on_disk.name,
                 'X-Smug-Keywords': image_on_disk.keywords,
                 'X-Smug-ResponseType': 'JSON',
                 'X-Smug-Version': 'v2',
+                'Content-MD5': hashlib.md5(image_data).hexdigest(),
             }
 
             if image_to_replace:
                 headers['X-Smug-ImageUri'] = image_to_replace.image_uri
-
-            # Read the entire file into memory for multipart upload (and for the oauth signature to work)
-            with open(image_on_disk.disk_path, 'rb') as f:
-                image_data = f.read()
 
             # Again - not sure why POST does not work here!!!
             from authlib.integrations.requests_client import OAuth1Session

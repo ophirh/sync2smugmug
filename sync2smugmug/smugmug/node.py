@@ -1,7 +1,7 @@
 import asyncio
 import itertools
 import logging
-from typing import Optional, Dict, List, Union
+from typing import Optional, Dict, List, Union, Tuple
 
 import dateutil.parser as dp
 
@@ -182,11 +182,13 @@ class AlbumOnSmugmug(Album):
         Upload missing images for an album
         """
 
-        my_images = await self.get_images()
-        disk_images = await from_album_on_disk.get_images()
-        missing_images = [i for i in disk_images if i not in my_images]
+        tasks = []
 
-        if missing_images and not dry_run:
+        my_images = {i.relative_path: i for i in await self.get_images()}
+        disk_images = await from_album_on_disk.get_images()
+
+        missing_images = [i for i in disk_images if i.relative_path not in my_images]
+        if missing_images:
             logger.info(f'Uploading {len(missing_images)} images from {from_album_on_disk} to {self}')
 
             tasks = [
@@ -194,6 +196,24 @@ class AlbumOnSmugmug(Album):
                 for image in missing_images
             ]
 
+        require_replacement: List[Tuple['ImageOnDisk', 'ImageOnSmugmug']] = []
+        for disk_image in disk_images:
+            smugmug_image = my_images.get(disk_image.relative_path)
+            if smugmug_image and disk_image.compare(smugmug_image) > 0:  # Only if disk is 'larger' than smugmug
+                # Image needs replacement
+                require_replacement.append((disk_image, smugmug_image))
+
+        if require_replacement:
+            logger.info(f'Replacing {len(missing_images)} images from {from_album_on_disk} to {self}')
+
+            tasks = [
+                asyncio.create_task(self.connection.image_upload(to_album=self,
+                                                                 image_on_disk=image,
+                                                                 image_to_replace=image_to_replace))
+                for image, image_to_replace in require_replacement
+            ]
+
+        if tasks and not dry_run:
             await asyncio.gather(*tasks)
 
             logger.debug(f'Album {from_album_on_disk} - Finished downloading')

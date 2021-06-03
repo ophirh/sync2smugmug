@@ -20,8 +20,10 @@ def get_task_pool() -> Pool:
 
 
 def cmp(a, b):
-    if hasattr(a, 'compare') and hasattr(b, 'compare'):
+    if hasattr(a, 'compare'):
         return a.compare(b)
+    elif hasattr(b, 'compare'):
+        return -b.compare(a)
     else:
         return (a > b) - (a < b)
 
