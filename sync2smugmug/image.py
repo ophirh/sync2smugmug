@@ -57,7 +57,10 @@ class Image:
         i = cmp(self.relative_path, other.relative_path)
 
         if i == 0:
-            i = cmp(self.size, other.size)
+            # TODO: Allow delta here? Or 10% difference?
+            i = self.size - other.size
+            if i != 0:
+                pass
 
         return i
 
