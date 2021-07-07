@@ -100,7 +100,7 @@ class DiskScanner:
 
         basename = entry.name.lower()
 
-        if any(a in basename for a in ('originals', 'lightroom', 'developed')):
+        if any(a in basename for a in ('originals', 'lightroom', 'developed', 'other')):
             return True
 
         if 'Picasa' in relative_path:
