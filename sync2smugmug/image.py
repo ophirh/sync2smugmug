@@ -56,8 +56,11 @@ class Image:
 
         i = cmp(self.relative_path, other.relative_path)
 
-        if i == 0:
-            i = cmp(self.size, other.size)
+        # There were several issues with comparing file sizes (especially for movies). Ignored for now
+        # if i == 0:
+        #     # Ignore minor differences in size (below 10% size)
+        #     if abs(self.size - other.size) / self.size > 0.2:
+        #         i = cmp(self.size, other.size)
 
         return i
 

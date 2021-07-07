@@ -204,7 +204,7 @@ class AlbumOnSmugmug(Album):
                 require_replacement.append((disk_image, smugmug_image))
 
         if require_replacement:
-            logger.info(f'Replacing {len(missing_images)} images from {from_album_on_disk} to {self}')
+            logger.info(f'Replacing {len(require_replacement)} images from {from_album_on_disk} to {self}')
 
             tasks = [
                 asyncio.create_task(self.connection.image_upload(to_album=self,
