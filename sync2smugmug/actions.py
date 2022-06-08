@@ -125,6 +125,7 @@ class SyncAlbumsAction(Action):
         if SyncTypeAction.UPLOAD in self.sync_action:
             await self.smugmug_album.upload_images(from_album_on_disk=self.disk_album, dry_run=dry_run)
 
+        # noinspection DuplicatedCode
         if SyncTypeAction.DELETE_ON_DISK in self.sync_action:
             tasks = []
             for image_to_delete_on_disk in await self.disk_album.get_images():
@@ -135,6 +136,7 @@ class SyncAlbumsAction(Action):
 
             self.disk_album.reload_images()  # Make sure album re-syncs
 
+        # noinspection DuplicatedCode
         if SyncTypeAction.DELETE_ON_CLOUD in self.sync_action:
             tasks = []
 
@@ -142,7 +144,7 @@ class SyncAlbumsAction(Action):
                 if not self.disk_album.contains_image(image_to_delete_on_smugmug):
                     tasks.append(asyncio.create_task(image_to_delete_on_smugmug.delete(dry_run=dry_run)))
 
-            await asyncio.gather(tasks)
+            await asyncio.gather(*tasks)
 
             self.smugmug_album.reload_images()  # Make sure album re-syncs
 

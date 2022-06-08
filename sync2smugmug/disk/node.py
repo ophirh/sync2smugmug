@@ -78,13 +78,9 @@ class FolderOnDisk(Folder, OnDisk):
                                     relative_path=from_smugmug_node.relative_path,
                                     makedirs=True)
 
-            tasks = []
-
             sub_node_on_smugmug: Union['FolderOnSmugmug', 'AlbumOnSmugmug']
             for sub_node in itertools.chain(from_smugmug_node.albums.values(), from_smugmug_node.sub_folders.values()):
-                tasks.append(asyncio.create_task(new_node.download(from_smugmug_node=sub_node, dry_run=dry_run)))
-
-            await asyncio.gather(*tasks)
+                await new_node.download(from_smugmug_node=sub_node, dry_run=dry_run)
 
             self.sub_folders[new_node.relative_path] = new_node
 
@@ -195,18 +191,19 @@ class AlbumOnDisk(Album, OnDisk):
         smugmug_images = await from_album_on_smugmug.get_images()
         missing_images = [i for i in smugmug_images if i.relative_path not in my_images]
 
-        if missing_images and not dry_run:
+        if missing_images:
             logger.info(f'Downloading {len(missing_images)} images from {from_album_on_smugmug} to {self}')
 
-            tasks = [
-                asyncio.create_task(from_album_on_smugmug.connection.image_download(to_album=self,
-                                                                                    image_on_smugmug=image))
-                for image in missing_images
-            ]
+            if not dry_run:
+                tasks = [
+                    asyncio.create_task(from_album_on_smugmug.connection.image_download(to_album=self,
+                                                                                        image_on_smugmug=image))
+                    for image in missing_images
+                ]
 
-            await asyncio.gather(*tasks)
+                await asyncio.gather(*tasks)
 
-            logger.info(f'Downloaded {self}')
+                logger.info(f'Downloaded {self}')
 
-            self.update_sync_date(sync_date=self.last_modified)
-            self.reload_images()
+                self.update_sync_date(sync_date=self.last_modified)
+                self.reload_images()

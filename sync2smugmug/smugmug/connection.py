@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import hashlib
-from multiprocessing.pool import AsyncResult
 from typing import List, Union, Dict, Generator, Tuple
 
 from authlib.integrations.httpx_client import AsyncOAuth1Client
@@ -152,7 +151,7 @@ class SmugMugConnection(BaseSmugMugConnection):
                          access_token_secret=access_token_secret,
                          use_test_folder=use_test_folder)
 
-        self.sem = asyncio.Semaphore(20)
+        self.sem = asyncio.Semaphore(40)
 
     async def folder_delete(self, folder: 'FolderOnSmugmug'):
         await self.request_delete(folder.uri)
@@ -167,21 +166,22 @@ class SmugMugConnection(BaseSmugMugConnection):
                          folder_uri: str = None,
                          with_children: bool = True) -> Tuple[Dict, List[Dict], List[Dict]]:
 
-        folder_uri = folder_uri or self._root_folder_uri
+        async with self.sem:  # Limit concurrency to avoid timeouts
+            folder_uri = folder_uri or self._root_folder_uri
 
-        r = await self.request_get(folder_uri)
-        folder = r['Folder']
+            r = await self.request_get(folder_uri)
+            folder = r['Folder']
 
-        # Node get the children
-        sub_folders, albums = None, None
+            # Node get the children
+            sub_folders, albums = None, None
 
-        if with_children:
-            if 'Folders' in folder['Uris']:
-                sub_folders = await self._get_items(folder['Uris']['Folders']['Uri'], object_name='Folder')
+            if with_children:
+                if 'Folders' in folder['Uris']:
+                    sub_folders = await self._get_items(folder['Uris']['Folders']['Uri'], object_name='Folder')
 
-            albums = await self._get_items(folder['Uris']['FolderAlbums']['Uri'], object_name='Album')
+                albums = await self._get_items(folder['Uris']['FolderAlbums']['Uri'], object_name='Album')
 
-        return folder, sub_folders, albums
+            return folder, sub_folders, albums
 
     async def folder_create(self,
                             parent_folder: 'FolderOnSmugmug',
@@ -248,7 +248,7 @@ class SmugMugConnection(BaseSmugMugConnection):
 
     async def image_download(self,
                              to_album: 'AlbumOnDisk',
-                             image_on_smugmug: 'ImageOnSmugmug') -> AsyncResult:
+                             image_on_smugmug: 'ImageOnSmugmug'):
         """
         Download a single image from the Album on Smugmug to a folder on disk
         """
@@ -299,23 +299,18 @@ class SmugMugConnection(BaseSmugMugConnection):
             if image_to_replace:
                 headers['X-Smug-ImageUri'] = image_to_replace.image_uri
 
-            # Again - not sure why POST does not work here!!!
-            from authlib.integrations.requests_client import OAuth1Session
-            session = OAuth1Session(self._consumer_key,
-                                    self._consumer_secret,
-                                    token=self._access_token,
-                                    token_secret=self._access_token_secret)
+            async with self.sem:  # Limit concurrency to avoid timeouts
+                # Again - not sure why POST does not work here!!!
+                from authlib.integrations.requests_client import OAuth1Session
+                session = OAuth1Session(self._consumer_key,
+                                        self._consumer_secret,
+                                        token=self._access_token,
+                                        token_secret=self._access_token_secret)
 
-            r = session.post('https://upload.smugmug.com/',
-                             files={'file': (image_on_disk.name, image_data)},
-                             headers=headers)
-            r.raise_for_status()
-
-            # async with self.sem:  # Limit concurrency to avoid timeouts
-            #     r = await self._asession.post('https://upload.smugmug.com/',
-            #                                   files={'file': (image_on_disk.name, image_data)},
-            #                                   headers=headers)
-            #     r.raise_for_status()
+                r = session.post('https://upload.smugmug.com/',
+                                 files={'file': (image_on_disk.name, image_data)},
+                                 headers=headers)
+                r.raise_for_status()
 
             logger.info(f'{action}ed {image_on_disk}')
 

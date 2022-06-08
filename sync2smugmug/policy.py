@@ -29,6 +29,6 @@ class SyncType:
     @classmethod
     def two_way_sync_no_deletes(cls) -> Tuple[SyncTypeAction, ...]:
         """
-        Sync both disk and smugmug - to make sure both systems have the same images (only additive, no deletions)
+        Sync both disk and Smugmug - to make sure both systems have the same images (only additive, no deletions)
         """
         return SyncTypeAction.UPLOAD, SyncTypeAction.DOWNLOAD,

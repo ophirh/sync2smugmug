@@ -1,7 +1,7 @@
 import asyncio
 import itertools
 import logging
-from typing import Optional, Dict, List, Union, Tuple
+from typing import Optional, Dict, List, Union
 
 import dateutil.parser as dp
 
@@ -191,32 +191,27 @@ class AlbumOnSmugmug(Album):
         if missing_images:
             logger.info(f'Uploading {len(missing_images)} images from {from_album_on_disk} to {self}')
 
-            tasks = [
-                asyncio.create_task(self.connection.image_upload(to_album=self, image_on_disk=image))
-                for image in missing_images
-            ]
+            if not dry_run:
+                tasks += [
+                    asyncio.create_task(self.connection.image_upload(to_album=self, image_on_disk=image))
+                    for image in missing_images
+                ]
 
-        require_replacement: List[Tuple['ImageOnDisk', 'ImageOnSmugmug']] = []
         for disk_image in disk_images:
             smugmug_image = my_images.get(disk_image.relative_path)
             if smugmug_image and disk_image.compare(smugmug_image) > 0:  # Only if disk is 'larger' than smugmug
                 # Image needs replacement
-                require_replacement.append((disk_image, smugmug_image))
+                logger.info(f'Replacing image {disk_image} with {smugmug_image}')
 
-        if require_replacement:
-            logger.info(f'Replacing {len(require_replacement)} images from {from_album_on_disk} to {self}')
+                if not dry_run:
+                    tasks.append(asyncio.create_task(self.connection.image_upload(to_album=self,
+                                                                                  image_on_disk=disk_image,
+                                                                                  image_to_replace=smugmug_image)))
 
-            tasks = [
-                asyncio.create_task(self.connection.image_upload(to_album=self,
-                                                                 image_on_disk=image,
-                                                                 image_to_replace=image_to_replace))
-                for image, image_to_replace in require_replacement
-            ]
+        await asyncio.gather(*tasks)
 
         if tasks and not dry_run:
-            await asyncio.gather(*tasks)
-
-            logger.debug(f'Album {from_album_on_disk} - Finished downloading')
+            logger.debug(f'Album {from_album_on_disk} - Finished uploading')
             from_album_on_disk.update_sync_date(sync_date=from_album_on_disk.last_modified)
 
             self.reload_images()

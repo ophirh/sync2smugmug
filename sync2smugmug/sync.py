@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import Tuple, Callable, List, Type, Optional, Awaitable
 
@@ -92,8 +91,6 @@ async def recurse_sync_folders(from_folder: Folder,
 
     assert from_folder.relative_path == to_folder.relative_path
 
-    tasks = []
-
     # Recursively apply to sub-folders of from_folder.
     for name, from_sub_folder in from_folder.sub_folders.items():
         to_sub_folder = to_folder.sub_folders.get(name)
@@ -109,18 +106,13 @@ async def recurse_sync_folders(from_folder: Folder,
                                    sync_type=sync_type)
 
     if should_delete:
-        delete_tasks = []
-
         # If delete is required, delete all children of 'to_node' that do not exist in 'from_node'
         for name, to_sub_folder in to_folder.sub_folders.items():
             if name not in from_folder.sub_folders:
                 logger.debug(f'[-{to_sub_folder.source[0]}] {to_sub_folder.relative_path}')
-                delete_tasks.append(
-                    asyncio.create_task(execute_action(remove_action_class(what_to_remove=to_sub_folder))))
 
-        await asyncio.gather(*delete_tasks)
-
-    sync_tasks = []
+                # Intentionally limit concurrency here...
+                await execute_action(remove_action_class(what_to_remove=to_sub_folder))
 
     # Now go over albums in the same way
     for name, from_album in from_folder.albums.items():
@@ -129,6 +121,7 @@ async def recurse_sync_folders(from_folder: Folder,
 
         to_album = to_folder.albums.get(name)
 
+        # Intentionally limit concurrency here...
         await sync_albums(from_album=from_album,
                           to_album=to_album,
                           parent_to_folder=to_folder,
@@ -136,19 +129,14 @@ async def recurse_sync_folders(from_folder: Folder,
                           execute_action=execute_action,
                           sync_type=sync_type)
 
-    await asyncio.gather(*sync_tasks)
-
     if should_delete:
-        delete_tasks = []
-
         # If delete is required, delete all children of 'to_node' that do not exist in 'from_node'
         for name, to_album in to_folder.albums.items():
             if name not in from_folder.albums:
                 logger.debug(f'[-{to_album.source[0]}] {to_album.relative_path}')
-                action = remove_action_class(what_to_remove=to_album)
-                delete_tasks.append(asyncio.create_task(execute_action(action)))
 
-        await asyncio.gather(*delete_tasks)
+                # Intentionally limit concurrency here...
+                await execute_action(remove_action_class(what_to_remove=to_album))
 
 
 async def sync_albums(from_album: Album,
@@ -208,7 +196,8 @@ async def sync_albums(from_album: Album,
         # Simply update the sync data since albums are really the same
         logger.debug(f'[~~] {from_album.relative_path} - Need to update sync data')
 
-        action = UpdateAlbumSyncData(disk_album=node_on_disk, smugmug_album=node_on_smugmug)
+        action = UpdateAlbumSyncData(disk_album=node_on_disk,
+                                     smugmug_album=node_on_smugmug)
         await execute_action(action)
 
     else:
