@@ -7,7 +7,7 @@ import dateutil.parser as dp
 
 from .connection import SmugMugConnection
 from .image import ImageOnSmugmug
-from ..disk import FolderOnDisk, AlbumOnDisk
+from ..disk.node import FolderOnDisk, AlbumOnDisk
 from ..node import Folder, Album
 
 logger = logging.getLogger(__name__)

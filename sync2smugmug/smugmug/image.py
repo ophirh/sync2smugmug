@@ -19,10 +19,6 @@ class ImageOnSmugmug(Image):
         return self.record['Uri']
 
     @property
-    def image_download_uri(self) -> str:
-        return self.record['ArchivedUri']
-
-    @property
     def caption(self) -> str:
         return self.record['Caption']
 
@@ -34,6 +30,6 @@ class ImageOnSmugmug(Image):
     def size(self) -> int:
         return self.record['OriginalSize']
 
-    def delete(self, dry_run: bool):
+    async def delete(self, dry_run: bool):
         if not dry_run:
-            self.album.connection.image_delete(self)
+            await self.album.connection.image_delete(self)

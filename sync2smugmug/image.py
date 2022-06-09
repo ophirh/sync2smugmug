@@ -28,8 +28,12 @@ class Image:
     @classmethod
     def is_raw_image(cls, f: str) -> bool:
         _, ext = os.path.splitext(f)
-        # Unknown file types: '.3gp',
         return ext.lower() in ('.orf', '.crw', '.cr2', '.nef', '.raw', '.dng')
+
+    @property
+    def is_video(self) -> bool:
+        _, ext = os.path.splitext(self.relative_path)
+        return ext.lower() in ('.avi', '.mv4', '.mov', '.mp4', '.mts')
 
     @property
     def caption(self) -> str:

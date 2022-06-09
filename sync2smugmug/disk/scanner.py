@@ -20,7 +20,7 @@ class DiskScanner:
 
         :return: The root folder for images on disk
         """
-        logger.info(f'Scanning disk (starting from {self.base_dir})...')
+        logger.debug(f'Scanning disk (starting from {self.base_dir})...')
 
         # Keep a lookup table to be able to get the node (by path) for quick access during the os.walk
         nodes: Dict[str, Union[FolderOnDisk, AlbumOnDisk]] = {}

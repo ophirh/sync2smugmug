@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Union
 from shutil import rmtree
 
 from ..config import config
-from ..disk import ImageOnDisk
+from ..disk.image import ImageOnDisk
 from ..node import Folder, Album
 
 logger = logging.getLogger(__name__)
@@ -70,8 +70,6 @@ class FolderOnDisk(Folder, OnDisk):
         :return: The node representing the uploaded entity
         """
 
-        logger.info(f'Download {from_smugmug_node} to {self}')
-
         if from_smugmug_node.is_folder:
             # Create the folder object
             new_node = FolderOnDisk(parent=self,
@@ -118,8 +116,10 @@ class AlbumOnDisk(Album, OnDisk):
     async def get_images(self) -> List[ImageOnDisk]:
         if self._images is None:
             # Lazy initialize images
-            self._images = [ImageOnDisk(album=self, relative_path=os.path.join(self.relative_path, f))
-                            for f in os.listdir(self.disk_path) if ImageOnDisk.is_image(self.disk_path, f)]
+            self._images = [
+                ImageOnDisk(album=self, relative_path=os.path.join(self.relative_path, f))
+                for f in os.listdir(self.disk_path) if ImageOnDisk.is_image(self.disk_path, f)
+            ]
 
         return self._images
 
@@ -192,18 +192,21 @@ class AlbumOnDisk(Album, OnDisk):
         missing_images = [i for i in smugmug_images if i.relative_path not in my_images]
 
         if missing_images:
-            logger.info(f'Downloading {len(missing_images)} images from {from_album_on_smugmug} to {self}')
+            logger.info(f'Preparing to download {len(missing_images)} images from {from_album_on_smugmug}...')
 
             if not dry_run:
                 tasks = [
-                    asyncio.create_task(from_album_on_smugmug.connection.image_download(to_album=self,
-                                                                                        image_on_smugmug=image))
+                    asyncio.create_task(
+                        from_album_on_smugmug.connection.image_download(
+                            to_album=self, image_on_smugmug=image
+                        )
+                    )
                     for image in missing_images
                 ]
 
                 await asyncio.gather(*tasks)
 
-                logger.info(f'Downloaded {self}')
+                logger.debug(f'Finished downloading {self}')
 
                 self.update_sync_date(sync_date=self.last_modified)
                 self.reload_images()

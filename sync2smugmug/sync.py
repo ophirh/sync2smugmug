@@ -13,10 +13,10 @@ from .actions import (
     RemoveAction,
 )
 from .config import config
-from .disk import DiskScanner, FolderOnDisk, AlbumOnDisk
+from .disk.scanner import DiskScanner, FolderOnDisk, AlbumOnDisk
 from .node import Album, Folder
 from .policy import SyncTypeAction
-from .smugmug import SmugmugScanner, FolderOnSmugmug, AlbumOnSmugmug
+from .smugmug.scanner import SmugmugScanner, FolderOnSmugmug, AlbumOnSmugmug
 from .smugmug.connection import SmugMugConnection
 
 logger = logging.getLogger(__name__)
@@ -216,7 +216,7 @@ async def generate_sync_actions(on_disk: FolderOnDisk,
     :param execute_action: Optional call back to be called each time an action is determined
     :param sync_type: What to do
     """
-    logger.info('Generating diff...')
+    logger.debug('Generating diff...')
 
     if SyncTypeAction.UPLOAD in sync_type:
         await recurse_sync_folders(from_folder=on_disk,

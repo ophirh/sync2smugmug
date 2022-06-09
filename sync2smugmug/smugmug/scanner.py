@@ -20,7 +20,7 @@ class SmugmugScanner:
         :return: The root folder for images on smugmug
         """
 
-        logger.info(f'Scanning SmugMug (starting from {self._connection.root_folder_uri})...')
+        logger.debug(f'Scanning SmugMug (starting from {self._connection.root_folder_uri})...')
         return await self._scan(node_uri=None, path=os.sep, parent=None, connection=self._connection)
 
     async def _scan(self,

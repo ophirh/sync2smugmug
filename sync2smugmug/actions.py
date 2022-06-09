@@ -2,10 +2,10 @@ import asyncio
 import logging
 from typing import Union, Tuple
 
-from .disk import FolderOnDisk, AlbumOnDisk
+from .disk.node import FolderOnDisk, AlbumOnDisk
 from .node import Folder, Album
 from .policy import SyncTypeAction
-from .smugmug import FolderOnSmugmug, AlbumOnSmugmug
+from .smugmug.node import FolderOnSmugmug, AlbumOnSmugmug
 
 logger = logging.getLogger(__name__)
 
