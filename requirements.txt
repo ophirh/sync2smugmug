@@ -1,5 +1,6 @@
-ConfigArgParse>=1.4
-python-dateutil>=2.8.1
 Authlib>=0.15.3
+aioretry==5.0.2
+ConfigArgParse>=1.4
 httpx>=0.18.1
+python-dateutil>=2.8.1
 rauth

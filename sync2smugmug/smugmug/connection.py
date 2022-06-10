@@ -4,12 +4,27 @@ import hashlib
 import os
 from typing import List, Union, Dict, Generator, Tuple, AsyncIterator
 
+from aioretry import retry, RetryInfo, RetryPolicyStrategy
 from authlib.integrations.httpx_client import AsyncOAuth1Client
 from httpx import HTTPError, Response
 
 from sync2smugmug.disk.image import ImageOnDisk
 
 logger = logging.getLogger(__name__)
+
+
+# This example shows the usage with python typings
+def retry_policy(info: RetryInfo) -> RetryPolicyStrategy:
+    """
+    Retry policy for connection issues
+    """
+    if isinstance(info.exception, ConnectionError):
+        if info.fails < 3:
+            logger.warning(f"Connection failed ({info.exception})! retrying...")
+            return False, info.fails * 0.1
+
+    # Raise any other exception
+    return True, 0
 
 
 class BaseSmugMugConnection:
@@ -297,6 +312,7 @@ class SmugMugConnection(BaseSmugMugConnection):
         # The archived version holds the original copy of the photo (but not for videos)
         return image_on_smugmug.record['ArchivedUri']
 
+    @retry(retry_policy)
     async def image_download(self,
                              to_album: 'AlbumOnDisk',
                              image_on_smugmug: 'ImageOnSmugmug'):
