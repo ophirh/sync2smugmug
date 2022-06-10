@@ -189,7 +189,7 @@ class AlbumOnDisk(Album, OnDisk):
 
         my_images = {i.relative_path: i for i in await self.get_images()}
         smugmug_images = await from_album_on_smugmug.get_images()
-        missing_images = [i for i in smugmug_images if i.relative_path not in my_images]
+        missing_images = {i for i in smugmug_images if i.relative_path not in my_images}
 
         if missing_images:
             logger.info(f'Preparing to download {len(missing_images)} images from {from_album_on_smugmug}...')

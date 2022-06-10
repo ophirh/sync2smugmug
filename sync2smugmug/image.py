@@ -68,5 +68,11 @@ class Image:
 
         return i
 
+    def __eq__(self, other):
+        return self.relative_path == other.relative_path
+
+    def __hash__(self):
+        return hash(self.relative_path)
+
     def __repr__(self) -> str:
         return f'{self.__class__.__name__} {self.relative_path}'

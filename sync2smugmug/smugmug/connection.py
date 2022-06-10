@@ -19,7 +19,7 @@ class BaseSmugMugConnection:
     API_SERVER = 'https://api.smugmug.com'
     API_PREFIX = 'api/v2'
     API_BASE_URL = f'{API_SERVER}/{API_PREFIX}'
-    CONCURRENT_CONNECTIONS = 30
+    CONCURRENT_CONNECTIONS = 25
 
     def __init__(self,
                  account: str,
@@ -220,9 +220,9 @@ class SmugMugConnection(BaseSmugMugConnection):
 
         if with_children:
             if 'Folders' in folder['Uris']:
-                sub_folders = await self._get_items(folder['Uris']['Folders']['Uri'], object_name='Folder')
+                sub_folders = await self._unpack_pagination(folder['Uris']['Folders']['Uri'], object_name='Folder')
 
-            albums = await self._get_items(folder['Uris']['FolderAlbums']['Uri'], object_name='Album')
+            albums = await self._unpack_pagination(folder['Uris']['FolderAlbums']['Uri'], object_name='Album')
 
         return folder, sub_folders, albums
 
@@ -284,14 +284,14 @@ class SmugMugConnection(BaseSmugMugConnection):
         return r['Album']
 
     async def album_images_get(self, album_record: Dict) -> List[Dict]:
-        return await self._get_items(relative_uri=album_record['Uris']['AlbumImages']['Uri'], object_name='AlbumImage')
+        return await self._unpack_pagination(relative_uri=album_record['Uris']['AlbumImages']['Uri'],
+                                             object_name='AlbumImage')
 
     async def get_download_url(self, image_on_smugmug: 'ImageOnSmugmug') -> str:
-        if image_on_smugmug.is_video:
+        # TODO: Problem! The downloaded name has the original (.avi / .mov) extension but the stored format is mp4.
+        if image_on_smugmug.is_video and 'LargestVideo' in image_on_smugmug.record['Uris']:
             # Need to fetch the largest video url - videos are NOT accessible via 'ArchivedUri'
             r = await self.request_get(image_on_smugmug.record['Uris']['LargestVideo']['Uri'])
-
-            # TODO: Problem! The downloaded name has the original (.avi / .mov) extension but the stored format is mp4.
             return r['LargestVideo']['Url']
 
         # The archived version holds the original copy of the photo (but not for videos)
@@ -313,10 +313,11 @@ class SmugMugConnection(BaseSmugMugConnection):
             async for chunk in self.stream(await self.get_download_url(image_on_smugmug)):
                 f.write(chunk)
 
-        # Now that we have completed writing the file, we can rename it to its actual name
-        # This is how we keep the download atomic and prevent partial downloads from persisting in the sync
+        # Now that we have completed writing the file to disk, we can use a rename operation to make that download
+        # 'atomic'. If the process failed mid-download, the scan will pick the image again for download.
         if os.path.exists(image_on_disk.disk_path):
             os.remove(image_on_disk.disk_path)
+
         os.rename(temp_file_name, image_on_disk.disk_path)
 
         logger.info(f'Downloaded {image_on_smugmug}')
@@ -353,7 +354,7 @@ class SmugMugConnection(BaseSmugMugConnection):
             logger.exception(f'Failed to upload {image_on_disk} to {to_album}')
             raise
 
-    async def _get_items(self, relative_uri: str, object_name: str) -> List[Dict]:
+    async def _unpack_pagination(self, relative_uri: str, object_name: str) -> List[Dict]:
         """
         Materialized full list of items (through pagination)
         """
