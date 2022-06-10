@@ -1,22 +1,8 @@
-import asyncio
 import logging
 import os
 import time
-from multiprocessing.pool import Pool
-from typing import Optional
 
 logger = logging.getLogger(__name__)
-
-_task_pool: Optional[Pool] = None
-
-
-def get_task_pool() -> Pool:
-    global _task_pool
-
-    if _task_pool is None:
-        _task_pool = Pool(10)
-
-    return _task_pool
 
 
 def cmp(a, b):
@@ -52,13 +38,3 @@ def scan_tree(path: str):
 
         if entry.is_dir(follow_symlinks=False):
             yield from scan_tree(entry.path)  # see below for Python 2.x
-
-
-def async_partial(f, *args):
-    async def f2(*args2):
-        result = f(*args, *args2)
-        if asyncio.iscoroutinefunction(f):
-            result = await result
-        return result
-
-    return f2
