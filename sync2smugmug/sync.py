@@ -49,7 +49,7 @@ async def sync(on_disk: FolderOnDisk, on_smugmug: FolderOnSmugmug) -> List[Actio
 
     actions: List[Action] = []
 
-    async def execute_action(action: Action, _: int = None):
+    async def execute_action(action: Action):
         """
         Execute the action and keep track of them
         """
@@ -250,6 +250,20 @@ def print_summary(on_disk: FolderOnDisk, on_smugmug: FolderOnSmugmug, diff):
     :param list[Action] diff: List of actions to perform
     """
 
+    downloads, uploads, disk_deletions, online_deletions, syncs = 0, 0, 0, 0, 0
+
+    for d in diff:
+        if isinstance(d, DownloadAction):
+            downloads += 1
+        elif isinstance(d, UploadAction):
+            uploads += 1
+        elif isinstance(d, RemoveFromDiskAction):
+            disk_deletions += 1
+        elif isinstance(d, RemoveFromSmugmugAction):
+            online_deletions += 1
+        elif isinstance(d, SyncAlbumsAction):
+            syncs += 1
+
     print('')
     print('Scan Results')
     print('============')
@@ -258,9 +272,9 @@ def print_summary(on_disk: FolderOnDisk, on_smugmug: FolderOnSmugmug, diff):
     print(f'Smugmug             : {on_smugmug.stats()}')
     print(f'Actions:')
     print(f'  Total:            : {len(diff)}')
-    print(f'  Downloads:        : {len([d for d in diff if isinstance(d, DownloadAction)])}')
-    print(f'  Uploads:          : {len([d for d in diff if isinstance(d, UploadAction)])}')
-    print(f'  Deletes (disk)    : {len([d for d in diff if isinstance(d, RemoveFromDiskAction)])}')
-    print(f'  Deletes (smugmug) : {len([d for d in diff if isinstance(d, RemoveFromSmugmugAction)])}')
-    print(f'  Album syncs       : {len([d for d in diff if isinstance(d, SyncAlbumsAction)])}')
+    print(f'  Downloads:        : {downloads}')
+    print(f'  Uploads:          : {uploads}')
+    print(f'  Deletes (disk)    : {disk_deletions}')
+    print(f'  Deletes (smugmug) : {online_deletions}')
+    print(f'  Album syncs       : {syncs}')
     print(f'')

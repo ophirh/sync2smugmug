@@ -33,29 +33,6 @@ class AddAction(Action):
         raise NotImplementedError()
 
 
-class RemoveAction(Action):
-    def __init__(self, what_to_remove):
-        super().__init__()
-
-        self.what_to_remove = what_to_remove
-
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__} (remove {self.what_to_remove})'
-
-    async def perform(self, dry_run: bool):
-        # Simply delete the subtree
-        logger.info(f'Delete {self.what_to_remove}')
-        await self.what_to_remove.delete(dry_run=dry_run)
-
-
-class RemoveFromDiskAction(RemoveAction):
-    pass
-
-
-class RemoveFromSmugmugAction(RemoveAction):
-    pass
-
-
 class DownloadAction(AddAction):
     def __init__(self,
                  what_to_add: Union[FolderOnSmugmug, AlbumOnSmugmug],
@@ -80,10 +57,10 @@ class DownloadAction(AddAction):
 class UploadAction(AddAction):
     def __init__(self,
                  what_to_add: Union[FolderOnDisk, AlbumOnDisk],
-                 parent_to_add_to: Union[FolderOnSmugmug, AlbumOnSmugmug],
+                 parent_to_add_to: FolderOnSmugmug,
                  message: str = None):
         """
-        Recursively scan a disk node and upload its contents to Smugmug
+        Upload a disk node and its subtree to Smugmug
 
         :param what_to_add: Smugmug node to add (will add entire subtree)
         :param parent_to_add_to: Disk node of parent directory
@@ -98,6 +75,29 @@ class UploadAction(AddAction):
 
         if not dry_run:
             await self.parent_to_add_to.upload(from_disk_node=self.what_to_add, dry_run=dry_run)
+
+
+class RemoveAction(Action):
+    def __init__(self, what_to_remove):
+        super().__init__()
+
+        self.what_to_remove = what_to_remove
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__} (remove {self.what_to_remove})'
+
+    async def perform(self, dry_run: bool):
+        # Simply delete the subtree
+        logger.info(f'Delete {self.what_to_remove}')
+        await self.what_to_remove.delete(dry_run=dry_run)
+
+
+class RemoveFromDiskAction(RemoveAction):
+    pass
+
+
+class RemoveFromSmugmugAction(RemoveAction):
+    pass
 
 
 class SyncAlbumsAction(Action):
@@ -157,7 +157,7 @@ class UpdateAlbumSyncData(Action):
                  disk_album: Union[AlbumOnDisk],
                  smugmug_album: Union[AlbumOnSmugmug]):
         """
-        Update the album's sync data
+        Update the album's sync data (no real changes were detected)
         """
         super().__init__()
 
