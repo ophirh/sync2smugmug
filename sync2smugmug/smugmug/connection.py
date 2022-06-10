@@ -338,6 +338,7 @@ class SmugMugConnection(BaseSmugMugConnection):
 
         logger.info(f'Downloaded {image_on_smugmug}')
 
+    @retry(retry_policy)
     async def image_upload(self,
                            to_album: 'AlbumOnSmugmug',
                            image_on_disk: ImageOnDisk,
