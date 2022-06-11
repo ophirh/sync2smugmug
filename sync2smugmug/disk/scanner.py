@@ -20,7 +20,8 @@ class DiskScanner:
 
         :return: The root folder for images on disk
         """
-        logger.debug(f'Scanning disk (starting from {self.base_dir})...')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f'Scanning disk (starting from {self.base_dir})...')
 
         # Keep a lookup table to be able to get the node (by path) for quick access during the os.walk
         nodes: Dict[str, Union[FolderOnDisk, AlbumOnDisk]] = {}
@@ -76,7 +77,9 @@ class DiskScanner:
 
             else:
                 # Skip empty dirs
-                logger.debug(f'Empty directory {entry.path}')
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f'Empty directory {entry.path}')
+
                 continue
 
             nodes[relative_path] = node

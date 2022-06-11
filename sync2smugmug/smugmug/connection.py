@@ -6,7 +6,7 @@ from typing import List, Union, Dict, Generator, Tuple, AsyncIterator
 
 from aioretry import retry, RetryInfo, RetryPolicyStrategy
 from authlib.integrations.httpx_client import AsyncOAuth1Client
-from httpx import HTTPError, Response
+from httpx import HTTPError, Response, TransportError
 
 from sync2smugmug.disk.image import ImageOnDisk
 
@@ -18,10 +18,10 @@ def retry_policy(info: RetryInfo) -> RetryPolicyStrategy:
     """
     Retry policy for connection issues
     """
-    if isinstance(info.exception, ConnectionError):
+    if isinstance(info.exception, TransportError):
         if info.fails < 3:
             logger.warning(f"Connection failed ({info.exception})! retrying...")
-            return False, info.fails * 0.1
+            return False, info.fails * 1.0
 
     # Raise any other exception
     return True, 0
@@ -57,6 +57,10 @@ class BaseSmugMugConnection:
         }
         self._sem = asyncio.Semaphore(self.CONCURRENT_CONNECTIONS)
 
+        # Session objects
+        self._asession = None
+        self._session = None
+
     @property
     def root_folder_uri(self) -> str:
         return self._root_folder_uri
@@ -84,12 +88,24 @@ class BaseSmugMugConnection:
             # Switch to use the Test folder
             self._root_folder_uri = f'{self._root_folder_uri}/Test/Test2'
 
+        from authlib.integrations.requests_client import OAuth1Session
+        self.session = OAuth1Session(self._consumer_key,
+                                     self._consumer_secret,
+                                     token=self._access_token,
+                                     token_secret=self._access_token_secret)
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self._asession is not None:
             await self._asession.aclose()
             self._asession = None
 
+        if self._session is not None:
+            self._session.close()
+            self._session = None
+
     async def request(self, method, url, *args, **kwargs) -> Response:
+        assert self._asession is not None
+
         async with self._sem:
             try:
                 if 'headers' not in kwargs:
@@ -109,21 +125,17 @@ class BaseSmugMugConnection:
         return r.json()['Response']
 
     async def request_post(self, relative_uri: str, json: Union[Dict, List], *args, **kwargs) -> Dict:
+        assert self._asession is not None and self._session is not None
+
         async with self._sem:
-            # For some reason, the async post does not work with Smugmug, so we are sending here a synchronous call.
-            # r = await self.request('POST', self._format_url(relative_uri), *args, json=json, **kwargs)
-
-            from authlib.integrations.requests_client import OAuth1Session
-            session = OAuth1Session(self._consumer_key,
-                                    self._consumer_secret,
-                                    token=self._access_token,
-                                    token_secret=self._access_token_secret)
-
             if 'headers' not in kwargs:
                 kwargs['headers'] = self._headers
 
             try:
-                r = session.post(self._format_url(relative_uri), *args, json=json, **kwargs)
+                # For some reason, the async post does not work with Smugmug, so we are sending here a synchronous call.
+                # r = await self.request('POST', self._format_url(relative_uri), *args, json=json, **kwargs)
+
+                r = self._session.post(self._format_url(relative_uri), *args, json=json, **kwargs)
                 r.raise_for_status()
 
             except Exception as e:
@@ -138,6 +150,8 @@ class BaseSmugMugConnection:
             await self.request('DELETE', self._format_url(relative_uri))
 
     async def stream(self, absolute_uri: str) -> AsyncIterator[bytes]:
+        assert self._asession is not None
+
         async with self._sem:  # Limit concurrency to avoid timeouts
             async with self._asession.stream('GET', absolute_uri) as r:
                 r.raise_for_status()
@@ -151,6 +165,8 @@ class BaseSmugMugConnection:
                      image_name: str,
                      keywords: str,
                      image_to_replace_uri: str = None):
+        assert self._asession is not None and self._session is not None
+
         headers = {
             'X-Smug-AlbumUri': album_uri,
             'X-Smug-Title': image_name,
@@ -166,15 +182,9 @@ class BaseSmugMugConnection:
 
         async with self._sem:  # Limit concurrency to avoid timeouts
             # Again - not sure why POST does not work here!!!
-            from authlib.integrations.requests_client import OAuth1Session
-            session = OAuth1Session(self._consumer_key,
-                                    self._consumer_secret,
-                                    token=self._access_token,
-                                    token_secret=self._access_token_secret)
-
-            r = session.post('https://upload.smugmug.com/',
-                             files={'file': (image_name, image_data)},
-                             headers=headers)
+            r = self._session.post('https://upload.smugmug.com/',
+                                   files={'file': (image_name, image_data)},
+                                   headers=headers)
             r.raise_for_status()
 
     @classmethod
@@ -321,7 +331,8 @@ class SmugMugConnection(BaseSmugMugConnection):
         """
         image_on_disk = ImageOnDisk(album=to_album, relative_path=image_on_smugmug.relative_path)
 
-        logger.debug(f'Downloading {image_on_smugmug} to {to_album}')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f'Downloading {image_on_smugmug} to {to_album}')
 
         temp_file_name = f"{image_on_disk.disk_path}.tmp"
 
@@ -353,7 +364,9 @@ class SmugMugConnection(BaseSmugMugConnection):
 
         try:
             action = 'Upload' if image_to_replace is None else 'Replace'
-            logger.debug(f'{action} {image_on_disk}')
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f'{action} {image_on_disk}')
 
             # Read the entire file into memory for multipart upload (and for the oauth signature to work)
             with open(image_on_disk.disk_path, 'rb') as f:

@@ -20,7 +20,9 @@ class SmugmugScanner:
         :return: The root folder for images on smugmug
         """
 
-        logger.debug(f'Scanning SmugMug (starting from {self._connection.root_folder_uri})...')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f'Scanning SmugMug (starting from {self._connection.root_folder_uri})...')
+
         return await self._scan(node_uri=None, path=os.sep, parent=None, connection=self._connection)
 
     async def _scan(self,
@@ -62,7 +64,9 @@ class SmugmugScanner:
             for sub_folder in sub_folders:
                 # Associate the sub_folder with its parent
                 folder.sub_folders[sub_folder.name] = sub_folder
-                logger.debug(f'{sub_folder.relative_path} - scanned')
+
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f'{sub_folder.relative_path} - scanned')
 
                 # Update parent counts
                 folder.folder_count += sub_folder.folder_count + 1
@@ -81,7 +85,9 @@ class SmugmugScanner:
 
                 # Associate the album with its parent
                 folder.albums[album_name] = album
-                logger.debug(f'{album.relative_path} - scanned')
+
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f'{album.relative_path} - scanned')
 
                 # Update parent counts
                 folder.album_count += 1

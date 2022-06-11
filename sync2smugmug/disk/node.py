@@ -165,7 +165,8 @@ class AlbumOnDisk(Album, OnDisk):
         """
         :param sync_date: sync date
         """
-        logger.debug(f'Update sync date {self}')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f'Update sync date {self}')
 
         sync_data = self._load_sync_data()
         sync_data['sync_date'] = sync_date
@@ -206,7 +207,8 @@ class AlbumOnDisk(Album, OnDisk):
 
                 await asyncio.gather(*tasks)
 
-                logger.debug(f'Finished downloading {self}')
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f'Finished downloading {self}')
 
                 self.update_sync_date(sync_date=self.last_modified)
                 self.reload_images()

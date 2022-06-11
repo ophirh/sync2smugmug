@@ -192,6 +192,7 @@ class AlbumOnSmugmug(Album):
             logger.info(f'Uploading {len(missing_images)} images from {from_album_on_disk} to {self}')
 
             if not dry_run:
+                # noinspection PyTypeChecker
                 tasks += [
                     asyncio.create_task(self.connection.image_upload(to_album=self, image_on_disk=image))
                     for image in missing_images
@@ -204,6 +205,7 @@ class AlbumOnSmugmug(Album):
                 logger.info(f'Replacing image {disk_image} with {smugmug_image}')
 
                 if not dry_run:
+                    # noinspection PyTypeChecker
                     tasks.append(asyncio.create_task(self.connection.image_upload(to_album=self,
                                                                                   image_on_disk=disk_image,
                                                                                   image_to_replace=smugmug_image)))
@@ -211,7 +213,9 @@ class AlbumOnSmugmug(Album):
         await asyncio.gather(*tasks)
 
         if tasks and not dry_run:
-            logger.debug(f'Album {from_album_on_disk} - Finished uploading')
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f'Album {from_album_on_disk} - Finished uploading')
+
             from_album_on_disk.update_sync_date(sync_date=from_album_on_disk.last_modified)
 
             self.reload_images()

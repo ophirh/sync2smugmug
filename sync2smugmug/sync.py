@@ -31,7 +31,6 @@ async def scan(connection: SmugMugConnection) -> Tuple[FolderOnDisk, FolderOnSmu
     logger.info(f'Scan results (on disk): {on_disk.stats()}')
 
     on_smugmug = await SmugmugScanner(connection=connection).scan()
-
     logger.info(f'Scan results (on smugmug): {on_smugmug.stats()}')
 
     return on_disk, on_smugmug
@@ -81,7 +80,9 @@ async def recurse_sync_folders(from_folder: Folder,
     if to_folder is None:
         assert parent_of_to_folder is not None
 
-        logger.debug(f'[+{from_folder.source[0]}] {from_folder.relative_path}')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f'[+{from_folder.source[0]}] {from_folder.relative_path}')
+
         action = add_action_class(what_to_add=from_folder,
                                   parent_to_add_to=parent_of_to_folder,
                                   message='entire folder')
@@ -109,7 +110,8 @@ async def recurse_sync_folders(from_folder: Folder,
         # If delete is required, delete all children of 'to_node' that do not exist in 'from_node'
         for name, to_sub_folder in to_folder.sub_folders.items():
             if name not in from_folder.sub_folders:
-                logger.debug(f'[-{to_sub_folder.source[0]}] {to_sub_folder.relative_path}')
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f'[-{to_sub_folder.source[0]}] {to_sub_folder.relative_path}')
 
                 # Intentionally limit concurrency here...
                 await execute_action(remove_action_class(what_to_remove=to_sub_folder))
@@ -133,7 +135,8 @@ async def recurse_sync_folders(from_folder: Folder,
         # If delete is required, delete all children of 'to_node' that do not exist in 'from_node'
         for name, to_album in to_folder.albums.items():
             if name not in from_folder.albums:
-                logger.debug(f'[-{to_album.source[0]}] {to_album.relative_path}')
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f'[-{to_album.source[0]}] {to_album.relative_path}')
 
                 # Intentionally limit concurrency here...
                 await execute_action(remove_action_class(what_to_remove=to_album))
@@ -151,7 +154,8 @@ async def sync_albums(from_album: Album,
     assert from_album is not None
 
     if to_album is None:
-        logger.debug(f'[+{from_album.source[0]}] {from_album.relative_path}')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f'[+{from_album.source[0]}] {from_album.relative_path}')
 
         action = add_action_class(what_to_add=from_album,
                                   parent_to_add_to=parent_to_folder,
@@ -185,7 +189,9 @@ async def sync_albums(from_album: Album,
 
     if need_sync:
         # Now add a sync actions to synchronize the albums
-        logger.debug(f'[<>] [{node_on_disk.source}] {node_on_disk.relative_path}')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f'[<>] [{node_on_disk.source}] {node_on_disk.relative_path}')
+
         action = SyncAlbumsAction(disk_album=node_on_disk,
                                   smugmug_album=node_on_smugmug,
                                   sync_type=sync_type)
@@ -194,14 +200,16 @@ async def sync_albums(from_album: Album,
 
     elif only_update_sync_data:
         # Simply update the sync data since albums are really the same
-        logger.debug(f'[~~] {from_album.relative_path} - Need to update sync data')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f'[~~] {from_album.relative_path} - Need to update sync data')
 
         action = UpdateAlbumSyncData(disk_album=node_on_disk,
                                      smugmug_album=node_on_smugmug)
         await execute_action(action)
 
     else:
-        logger.debug(f'[==] {from_album.relative_path}')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f'[==] {from_album.relative_path}')
 
 
 async def generate_sync_actions(on_disk: FolderOnDisk,
@@ -216,7 +224,8 @@ async def generate_sync_actions(on_disk: FolderOnDisk,
     :param execute_action: Optional call back to be called each time an action is determined
     :param sync_type: What to do
     """
-    logger.debug('Generating diff...')
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug('Generating diff...')
 
     if SyncTypeAction.UPLOAD in sync_type:
         await recurse_sync_folders(from_folder=on_disk,
