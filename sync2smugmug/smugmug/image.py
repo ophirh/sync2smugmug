@@ -1,14 +1,17 @@
+import logging
 import os
 from typing import Dict
 
 from ..image import Image
 
+logger = logging.getLogger(__name__)
+
 
 class ImageOnSmugmug(Image):
-    def __init__(self, album: 'AlbumOnSmugmug', image_record: Dict):
-        super().__init__(album, os.path.join(album.relative_path, image_record['FileName']))
+    def __init__(self, album: 'AlbumOnSmugmug', record: Dict):
+        super().__init__(album, os.path.join(album.relative_path, record['FileName']))
 
-        self.record = image_record
+        self.record = record
 
     @property
     def album(self) -> 'AlbumOnSmugmug':
@@ -32,4 +35,5 @@ class ImageOnSmugmug(Image):
 
     async def delete(self, dry_run: bool):
         if not dry_run:
-            await self.album.connection.image_delete(self)
+            logger.info(f"Deleting {self}")
+            await self.album.connection.request_delete(self.image_uri)

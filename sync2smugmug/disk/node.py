@@ -90,7 +90,7 @@ class FolderOnDisk(Folder, OnDisk):
                                    makedirs=True)
 
             # Upload the images for this album
-            await new_node.download_images(from_album_on_smugmug=from_smugmug_node, dry_run=dry_run)
+            await from_smugmug_node.download_images(to_album_on_disk=new_node, dry_run=dry_run)
 
             self.albums[new_node.relative_path] = new_node
 
@@ -152,6 +152,7 @@ class AlbumOnDisk(Album, OnDisk):
     def _load_sync_data(self) -> Dict:
         p = os.path.join(self.disk_path, SYNC_DATA_FILENAME)
         if os.path.exists(p):
+            # noinspection PyBroadException
             try:
                 with open(p) as f:
                     return json.load(f)
@@ -180,36 +181,3 @@ class AlbumOnDisk(Album, OnDisk):
         p = os.path.join(self.disk_path, SYNC_DATA_FILENAME)
         if os.path.exists(p):
             os.remove(p)
-
-    async def download_images(self, from_album_on_smugmug: 'AlbumOnSmugmug', dry_run: bool):
-        """
-        Download missing images from the album on smugmug to the disk
-
-        :param from_album_on_smugmug: Album to download from
-        :param dry_run: If True, will not actually download anything
-        """
-
-        my_images = {i.relative_path: i for i in await self.get_images()}
-        smugmug_images = await from_album_on_smugmug.get_images()
-        missing_images = {i for i in smugmug_images if i.relative_path not in my_images}
-
-        if missing_images:
-            logger.info(f'Preparing to download {len(missing_images)} images from {from_album_on_smugmug}...')
-
-            if not dry_run:
-                tasks = [
-                    asyncio.create_task(
-                        from_album_on_smugmug.connection.image_download(
-                            to_album=self, image_on_smugmug=image
-                        )
-                    )
-                    for image in missing_images
-                ]
-
-                await asyncio.gather(*tasks)
-
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(f'Finished downloading {self}')
-
-                self.update_sync_date(sync_date=self.last_modified)
-                self.reload_images()

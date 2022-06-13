@@ -120,7 +120,7 @@ class SyncAlbumsAction(Action):
 
     async def perform(self, dry_run: bool):
         if SyncTypeAction.DOWNLOAD in self.sync_action:
-            await self.disk_album.download_images(from_album_on_smugmug=self.smugmug_album, dry_run=dry_run)
+            await self.smugmug_album.download_images(to_album_on_disk=self.disk_album, dry_run=dry_run)
 
         if SyncTypeAction.UPLOAD in self.sync_action:
             await self.smugmug_album.upload_images(from_album_on_disk=self.disk_album, dry_run=dry_run)

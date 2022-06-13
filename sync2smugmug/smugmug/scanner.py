@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from typing import Optional, Union
+from typing import Optional, Union, Tuple, Dict, List
 
 from .connection import SmugMugConnection
 from .node import FolderOnSmugmug, AlbumOnSmugmug
@@ -35,12 +35,12 @@ class SmugmugScanner:
         """
 
         folder_record, sub_folder_records, album_records = \
-            await connection.folder_get(folder_uri=node_uri, with_children=True)
+            await self._folder_get(folder_uri=node_uri, with_children=True)
 
         folder = FolderOnSmugmug(parent=parent,
                                  relative_path=path,
                                  record=folder_record,
-                                 smugmug_connection=connection)
+                                 connection=connection)
 
         if sub_folder_records:
             tasks = []
@@ -95,3 +95,24 @@ class SmugmugScanner:
                 folder.image_count += album.image_count
 
         return folder
+
+    async def _folder_get(self,
+                          folder_uri: str = None,
+                          with_children: bool = True) -> Tuple[Dict, List[Dict], List[Dict]]:
+        folder_uri = folder_uri or self._connection.root_folder_uri
+
+        r = await self._connection.request_get(folder_uri)
+        folder = r['Folder']
+
+        # Node get the children
+        sub_folders, albums = None, None
+
+        if with_children:
+            if 'Folders' in folder['Uris']:
+                sub_folders = await self._connection.unpack_pagination(folder['Uris']['Folders']['Uri'],
+                                                                       object_name='Folder')
+
+            albums = await self._connection.unpack_pagination(folder['Uris']['FolderAlbums']['Uri'],
+                                                              object_name='Album')
+
+        return folder, sub_folders, albums

@@ -59,7 +59,7 @@ class DiskScanner:
             if AlbumOnDisk.has_images(entry.path):  # An album has images
                 node = AlbumOnDisk(parent=parent_node, relative_path=relative_path)
 
-                parent_node.albums[node_name] = node
+                parent_node.albums[node.name] = node
 
                 # Update counts
                 root.album_count += 1
@@ -68,7 +68,7 @@ class DiskScanner:
             elif FolderOnDisk.has_sub_folders(entry.path):  # A folder has sub-folders
                 node = FolderOnDisk(parent=parent_node, relative_path=relative_path)
 
-                parent_node.sub_folders[node_name] = node
+                parent_node.sub_folders[node.name] = node
 
                 # Update counts
                 root.folder_count += 1 + node.folder_count

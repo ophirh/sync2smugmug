@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Set
+from typing import Dict, List
 
 from .utils import cmp
 from .image import Image
@@ -116,7 +116,7 @@ class Album(Node):
     def is_album(self) -> bool:
         return True
 
-    async def get_images(self) -> Set[Image]:
+    async def get_images(self) -> List[Image]:
         raise NotImplementedError()
 
     @property
