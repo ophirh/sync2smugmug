@@ -13,7 +13,7 @@ class SyncTypeAction(Enum):
 class SyncType:
     @classmethod
     def local_backup(cls) -> Tuple[SyncTypeAction, ...]:
-        return SyncTypeAction.DOWNLOAD, SyncTypeAction.DELETE_DUPLICATES,
+        return SyncTypeAction.DOWNLOAD,
 
     @classmethod
     def local_backup_clean(cls) -> Tuple[SyncTypeAction, ...]:
