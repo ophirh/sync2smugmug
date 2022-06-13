@@ -113,7 +113,7 @@ class Image:
     def size(self) -> int:
         raise NotImplementedError()
 
-    def delete(self, dry_run: bool):
+    async def delete(self, dry_run: bool):
         raise NotImplementedError()
 
     def compare(self, other: 'Image') -> int:

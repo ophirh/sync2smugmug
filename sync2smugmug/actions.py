@@ -118,6 +118,7 @@ class SyncAlbumsAction(Action):
         self.smugmug_album = smugmug_album
         self.sync_action = sync_type
 
+    # noinspection DuplicatedCode
     async def perform(self, dry_run: bool):
         if SyncTypeAction.DOWNLOAD in self.sync_action:
             await self.smugmug_album.download_images(to_album_on_disk=self.disk_album, dry_run=dry_run)
@@ -129,7 +130,7 @@ class SyncAlbumsAction(Action):
             tasks = []
 
             for image_to_delete_on_disk in await self.disk_album.get_images():
-                if not self.smugmug_album.contains_image(image_to_delete_on_disk):
+                if not await self.smugmug_album.contains_image(image_to_delete_on_disk):
                     tasks.append(asyncio.create_task(image_to_delete_on_disk.delete(dry_run=dry_run)))
 
             await asyncio.gather(*tasks)
