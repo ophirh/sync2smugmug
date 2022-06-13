@@ -95,10 +95,10 @@ class BaseSmugMugConnection:
             self._root_folder_uri = f'{self._root_folder_uri}/Test/Test2'
 
         from authlib.integrations.requests_client import OAuth1Session
-        self.session = OAuth1Session(self._consumer_key,
-                                     self._consumer_secret,
-                                     token=self._access_token,
-                                     token_secret=self._access_token_secret)
+        self._session = OAuth1Session(self._consumer_key,
+                                      self._consumer_secret,
+                                      token=self._access_token,
+                                      token_secret=self._access_token_secret)
 
     async def disconnect(self):
         if self._asession is not None:
@@ -187,7 +187,7 @@ class BaseSmugMugConnection:
             headers['X-Smug-ImageUri'] = image_to_replace_uri
 
         async with self._sem:  # Limit concurrency to avoid timeouts
-            # Again - not sure why POST does not work here!!!
+            # Again - not sure why async POST does not work here!!!
             r = self._session.post('https://upload.smugmug.com/',
                                    files={'file': (image_name, image_data)},
                                    headers=headers)
