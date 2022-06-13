@@ -17,7 +17,6 @@ async def main():
 
     async with connection:
         on_disk, on_smugmug = await scan(connection)
-
         diff = await sync(on_disk=on_disk, on_smugmug=on_smugmug)
 
     print_summary(on_disk, on_smugmug, diff)

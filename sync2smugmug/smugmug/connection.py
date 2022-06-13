@@ -74,6 +74,12 @@ class BaseSmugMugConnection:
         return self._user
 
     async def __aenter__(self):
+        await self.connect()
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.disconnect()
+
+    async def connect(self):
         self._asession = AsyncOAuth1Client(self._consumer_key,
                                            self._consumer_secret,
                                            token=self._access_token,
@@ -94,7 +100,7 @@ class BaseSmugMugConnection:
                                      token=self._access_token,
                                      token_secret=self._access_token_secret)
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def disconnect(self):
         if self._asession is not None:
             await self._asession.aclose()
             self._asession = None
@@ -229,7 +235,8 @@ class SmugMugConnection(BaseSmugMugConnection):
         await self.request_delete(album.uri)
 
     async def image_delete(self, image: 'ImageOnSmugmug'):
-        await self.request_delete(image.uri)
+        logger.info(f"Deleting {image}")
+        await self.request_delete(image.image_uri)
 
     async def folder_get(self,
                          folder_uri: str = None,
@@ -253,7 +260,7 @@ class SmugMugConnection(BaseSmugMugConnection):
 
     async def folder_create(self,
                             parent_folder: 'FolderOnSmugmug',
-                            folder_on_disk: 'FolderOnDisk'):
+                            folder_on_disk: 'FolderOnDisk') -> Dict:
         """
         Create a new sub-folder under the parent folder
         """
@@ -329,7 +336,9 @@ class SmugMugConnection(BaseSmugMugConnection):
         """
         Download a single image from the Album on Smugmug to a folder on disk
         """
-        image_on_disk = ImageOnDisk(album=to_album, relative_path=image_on_smugmug.relative_path)
+        image_on_disk = \
+            ImageOnDisk(album=to_album,
+                        relative_path=image_on_smugmug.relative_path)
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f'Downloading {image_on_smugmug} to {to_album}')

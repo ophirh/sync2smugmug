@@ -70,18 +70,20 @@ class FolderOnDisk(Folder, OnDisk):
         :return: The node representing the uploaded entity
         """
 
+        # Case #1 - this is a folder. We need to recursively download down the tree
         if from_smugmug_node.is_folder:
             # Create the folder object
             new_node = FolderOnDisk(parent=self,
                                     relative_path=from_smugmug_node.relative_path,
                                     makedirs=True)
 
-            sub_node_on_smugmug: Union['FolderOnSmugmug', 'AlbumOnSmugmug']
+            # Recursively download sub-folders and albums
             for sub_node in itertools.chain(from_smugmug_node.albums.values(), from_smugmug_node.sub_folders.values()):
                 await new_node.download(from_smugmug_node=sub_node, dry_run=dry_run)
 
             self.sub_folders[new_node.relative_path] = new_node
 
+        # Case #2 - This is an album - we need to download its images
         else:
             new_node = AlbumOnDisk(parent=self,
                                    relative_path=from_smugmug_node.relative_path,
@@ -165,8 +167,7 @@ class AlbumOnDisk(Album, OnDisk):
         """
         :param sync_date: sync date
         """
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f'Update sync date {self}')
+        logger.info(f'Update sync date {self}')
 
         sync_data = self._load_sync_data()
         sync_data['sync_date'] = sync_date

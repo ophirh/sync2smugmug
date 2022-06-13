@@ -58,15 +58,13 @@ class Image:
     def compare(self, other: 'Image') -> int:
         assert isinstance(other, Image)
 
-        i = cmp(self.relative_path, other.relative_path)
-
         # There were several issues with comparing file sizes (especially for movies). Ignored for now
         # if i == 0:
         #     # Ignore minor differences in size (below 10% size)
         #     if abs(self.size - other.size) / self.size > 0.2:
         #         i = cmp(self.size, other.size)
 
-        return i
+        return cmp(self.relative_path, other.relative_path)
 
     def __eq__(self, other):
         return self.relative_path == other.relative_path

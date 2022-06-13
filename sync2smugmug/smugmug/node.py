@@ -76,34 +76,38 @@ class FolderOnSmugmug(Folder):
 
         # Create the folder/album on smugmug and return the record
         if from_disk_node.is_folder:
-            if not dry_run:
-                new_node_record = await self.connection.folder_create(parent_folder=self, folder_on_disk=from_disk_node)
-            else:
-                new_node_record = {}
+            new_node_record = \
+                await self.connection.folder_create(parent_folder=self,
+                                                    folder_on_disk=from_disk_node) if not dry_run else {}
 
             # Create a folder object from this record
             new_node = FolderOnSmugmug(parent=self,
                                        relative_path=from_disk_node.relative_path,
                                        record=new_node_record)
+
             self.sub_folders[new_node.relative_path] = new_node
 
             tasks = []
 
             sub_node: Union['FolderOnDisk', 'AlbumOnDisk']
             for sub_node in itertools.chain(from_disk_node.albums.values(), from_disk_node.sub_folders.values()):
-                tasks.append(asyncio.create_task(new_node.upload(from_disk_node=sub_node, dry_run=dry_run)))
+                task = new_node.upload(from_disk_node=sub_node, dry_run=dry_run)
+                tasks.append(asyncio.create_task(task))
 
             await asyncio.gather(*tasks)
 
         else:
             if not dry_run:
-                new_node_record = await self.connection.album_create(parent_folder=self, album_on_disk=from_disk_node)
+                new_node_record = \
+                    await self.connection.album_create(parent_folder=self,
+                                                       album_on_disk=from_disk_node)
             else:
                 new_node_record = {}
 
             new_node = AlbumOnSmugmug(parent=self,
                                       relative_path=from_disk_node.relative_path,
                                       record=new_node_record)
+
             self.albums[new_node.relative_path] = new_node
 
             # Upload the images for this album
@@ -165,8 +169,12 @@ class AlbumOnSmugmug(Album):
 
     async def get_images(self) -> List[ImageOnSmugmug]:
         if self._images is None:
+            # Lazy load images
             image_records = await self.connection.album_images_get(self.record)
-            self._images = [ImageOnSmugmug(album=self, image_record=image) for image in image_records]
+            self._images = [
+                ImageOnSmugmug(album=self, image_record=image)
+                for image in image_records
+            ]
 
         return self._images
 
@@ -227,3 +235,22 @@ class AlbumOnSmugmug(Album):
 
         if not dry_run:
             await self.connection.album_delete(self)
+
+    async def remove_duplicates(self, dry_run: bool):
+        # Check images for duplicates
+        images = list(await self.get_images())  # Local copy
+        unique_images = set(images)
+
+        duplicates = len(images) - len(unique_images)
+
+        if duplicates > 0:
+            logger.info(f"{self} - Deleting {duplicates} duplicate photos")
+
+            while len(images) > 0:
+                image = images.pop()
+
+                if image in images:
+                    # This is a duplicate!
+                    await image.delete(dry_run=dry_run)
+
+            self.reload_images()

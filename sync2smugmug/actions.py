@@ -125,34 +125,36 @@ class SyncAlbumsAction(Action):
         if SyncTypeAction.UPLOAD in self.sync_action:
             await self.smugmug_album.upload_images(from_album_on_disk=self.disk_album, dry_run=dry_run)
 
-        # noinspection DuplicatedCode
         if SyncTypeAction.DELETE_ON_DISK in self.sync_action:
             tasks = []
+
             for image_to_delete_on_disk in await self.disk_album.get_images():
                 if not self.smugmug_album.contains_image(image_to_delete_on_disk):
                     tasks.append(asyncio.create_task(image_to_delete_on_disk.delete(dry_run=dry_run)))
 
             await asyncio.gather(*tasks)
+            self.disk_album.reload_images()
 
-            self.disk_album.reload_images()  # Make sure album re-syncs
-
-        # noinspection DuplicatedCode
         if SyncTypeAction.DELETE_ON_CLOUD in self.sync_action:
             tasks = []
 
             for image_to_delete_on_smugmug in await self.smugmug_album.get_images():
-                if not self.disk_album.contains_image(image_to_delete_on_smugmug):
+                if not await self.disk_album.contains_image(image_to_delete_on_smugmug):
                     tasks.append(asyncio.create_task(image_to_delete_on_smugmug.delete(dry_run=dry_run)))
 
             await asyncio.gather(*tasks)
+            self.smugmug_album.reload_images()  # Make sure album re-syncs
 
+        if SyncTypeAction.DELETE_DUPLICATES in self.sync_action:
+            # Detect and remove duplicates in the Smugmug album (images with same name)
+            await self.smugmug_album.remove_duplicates(dry_run=dry_run)
             self.smugmug_album.reload_images()  # Make sure album re-syncs
 
         if not dry_run:
             self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)
 
 
-class UpdateAlbumSyncData(Action):
+class UpdateAlbumSyncDataAction(Action):
     def __init__(self,
                  disk_album: Union[AlbumOnDisk],
                  smugmug_album: Union[AlbumOnSmugmug]):
@@ -166,3 +168,17 @@ class UpdateAlbumSyncData(Action):
 
     async def perform(self, dry_run: bool):
         self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)
+
+
+class RemoveOnlineDuplicatesAction(Action):
+    def __init__(self,
+                 smugmug_album: Union[AlbumOnSmugmug]):
+        """
+        Check and remove duplicates on Smugmug
+        """
+        super().__init__()
+
+        self.smugmug_album: AlbumOnSmugmug = smugmug_album
+
+    async def perform(self, dry_run: bool):
+        await self.smugmug_album.remove_duplicates(dry_run=dry_run)
