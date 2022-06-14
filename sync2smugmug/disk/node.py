@@ -31,26 +31,10 @@ class OnDisk:
 
 
 # noinspection PyAbstractClass
-class FolderOnDisk(Folder, OnDisk):
+class FolderOnDisk(Folder['FolderOnDisk', 'AlbumOnDisk'], OnDisk):
     def __init__(self, parent: Optional['FolderOnDisk'], relative_path: str, makedirs: bool = False):
         Folder.__init__(self, 'Disk', parent, relative_path)
         OnDisk.__init__(self, relative_path=self.relative_path, makedirs=makedirs)
-
-        self._sub_folders = {}
-        self._albums = {}
-
-    @property
-    def parent(self) -> 'FolderOnDisk':
-        assert isinstance(self._parent, FolderOnDisk)
-        return self._parent
-
-    @property
-    def sub_folders(self) -> Dict[str, 'FolderOnDisk']:
-        return self._sub_folders
-
-    @property
-    def albums(self) -> Dict[str, 'AlbumOnDisk']:
-        return self._albums
 
     @property
     def last_modified(self) -> float:
@@ -97,7 +81,7 @@ class FolderOnDisk(Folder, OnDisk):
 
 
 # noinspection PyAbstractClass
-class AlbumOnDisk(Album, OnDisk):
+class AlbumOnDisk(Album['FolderOnDisk', 'AlbumOnDisk'], OnDisk):
     def __init__(self, parent: FolderOnDisk, relative_path: str, makedirs: bool = False):
         Album.__init__(self, 'Disk', parent, relative_path)
         OnDisk.__init__(self, relative_path=self.relative_path, makedirs=makedirs)

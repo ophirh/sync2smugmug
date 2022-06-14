@@ -1,11 +1,14 @@
 import os
-from typing import Dict, List
+from typing import Dict, List, TypeVar, Generic
 
 from .utils import cmp
 from .image import Image
 
+FolderType = TypeVar('FolderType', covariant=True)
+AlbumType = TypeVar('AlbumType', covariant=True)
 
-class Node:
+
+class Node(Generic[FolderType, AlbumType]):
     """
     Represents a node (folder, album or page) in the system - or a subtree of the hierarchy.
     The natural key to a node is its 'relative_path' ('' as the root)
@@ -13,7 +16,7 @@ class Node:
 
     ROOT = ''
 
-    def __init__(self, source: str, parent: 'Folder', relative_path: str):
+    def __init__(self, source: str, parent: FolderType, relative_path: str):
         """
         :param source: Source of this node (Disk or Smug)
         :param Node parent: Parent node (None for root)
@@ -24,7 +27,7 @@ class Node:
         self._relative_path = relative_path
 
     @property
-    def parent(self) -> 'Folder':
+    def parent(self) -> FolderType:
         return self._parent
 
     @property
@@ -74,17 +77,24 @@ class Node:
         return f'{self.__class__.__name__} {self.relative_path}'
 
 
-class Folder(Node):
-    def __init__(self, source: str, parent: 'Folder', relative_path: str):
+class Folder(Node[FolderType, AlbumType]):
+    def __init__(self, source: str, parent: FolderType, relative_path: str):
         super().__init__(source, parent, relative_path)
 
         self.folder_count = 0
         self.album_count = 0
         self.image_count = 0
 
-    def stats(self) -> str:
-        # Show some stats on the scan
-        return f'{self.folder_count} folders, {self.album_count} albums, {self.image_count} images'
+        self._sub_folders: Dict[str, FolderType] = {}
+        self._albums: Dict[str, AlbumType] = {}
+
+    @property
+    def sub_folders(self) -> Dict[str, 'FolderOnDisk']:
+        return self._sub_folders
+
+    @property
+    def albums(self) -> Dict[str, 'AlbumOnDisk']:
+        return self._albums
 
     @property
     def last_modified(self) -> float:
@@ -94,19 +104,61 @@ class Folder(Node):
     def is_album(self) -> bool:
         return False
 
-    @property
-    def sub_folders(self) -> Dict[str, 'Folder']:
-        raise NotImplementedError()
+    def stats(self) -> str:
+        # Show some stats on the scan
+        return f'{self.folder_count} folders, {self.album_count} albums, {self.image_count} images'
 
-    @property
-    def albums(self) -> Dict[str, 'Album']:
-        raise NotImplementedError()
+    def add_sub_folder(self, sub_folder: FolderType):
+        self._sub_folders[sub_folder.relative_path] = sub_folder
+
+        # Update counts (go up the hierarchy)
+        parent: Folder = self.parent
+        while parent:
+            parent.folder_count += 1
+            parent.album_count += sub_folder.album_count
+            parent.image_count += sub_folder.image_count
+            parent = parent.parent
+
+    def remove_sub_folder(self, sub_folder: FolderType):
+        del self._sub_folders[sub_folder.relative_path]
+
+        # Update counts (go up the hierarchy)
+        parent: Folder = self.parent
+        while parent:
+            parent.folder_count -= 1
+            parent.album_count += sub_folder.album_count
+            parent.image_count += sub_folder.image_count
+            parent = parent.parent
+
+    def add_album(self, album: AlbumType):
+        self._albums[album.relative_path] = album
+
+        image_count = album.image_count
+
+        # Update counts (go up the hierarchy)
+        parent: Folder = self.parent
+        while parent:
+            parent.album_count += 1
+            parent.image_count += image_count
+            parent = parent.parent
+
+    def remove_album(self, album: AlbumType):
+        del self._albums[album.relative_path]
+
+        image_count = album.image_count
+
+        # Update counts (go up the hierarchy)
+        parent: Folder = self.parent
+        while parent:
+            parent.album_count -= 1
+            parent.image_count -= image_count
+            parent = parent.parent
 
     async def delete(self, dry_run: bool):
         raise NotImplementedError()
 
 
-class Album(Node):
+class Album(Node[FolderType, AlbumType]):
     def __init__(self, source: str, parent: Folder, relative_path: str):
         super().__init__(source, parent, relative_path)
 
@@ -129,7 +181,7 @@ class Album(Node):
         assert isinstance(image, Image)
         return any(i for i in await self.get_images() if i.relative_path == image.relative_path)
 
-    def compare(self, other: 'Album') -> int:
+    def compare(self, other: AlbumType) -> int:
         """
         Same functionality as old __cmp__ or C's strcmp
         """
@@ -141,7 +193,7 @@ class Album(Node):
 
         return i
 
-    def shallow_compare(self, other: 'Album') -> int:
+    def shallow_compare(self, other: AlbumType) -> int:
         i = cmp(self.relative_path, other.relative_path)
         if i != 0:
             return i
@@ -157,7 +209,7 @@ class Album(Node):
         # TODO: Check change in description and other meta-data attributes
         return 0
 
-    async def deep_compare(self, other: 'Album', shallow_compare_first: bool = True) -> int:
+    async def deep_compare(self, other: AlbumType, shallow_compare_first: bool = True) -> int:
         if shallow_compare_first:
             i = self.shallow_compare(other)
             if i != 0:
