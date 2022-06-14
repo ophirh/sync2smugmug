@@ -8,8 +8,10 @@ from .image import Image
 class Node:
     """
     Represents a node (folder, album or page) in the system - or a subtree of the hierarchy.
-    The natural key to a node is its 'relative_path', starting with '/' (os.sep) as the root.
+    The natural key to a node is its 'relative_path' ('' as the root)
     """
+
+    ROOT = ''
 
     def __init__(self, source: str, parent: 'Folder', relative_path: str):
         """
@@ -19,7 +21,7 @@ class Node:
         """
         self._source = source
         self._parent = parent
-        self._relative_path = os.path.normpath(relative_path or os.sep)
+        self._relative_path = relative_path
 
     @property
     def parent(self) -> 'Folder':
@@ -48,7 +50,7 @@ class Node:
 
     @classmethod
     def get_is_root(cls, relative_path) -> bool:
-        return relative_path in ('', os.sep)
+        return relative_path == Node.ROOT
 
     @property
     def is_album(self) -> bool:
@@ -65,7 +67,7 @@ class Node:
         """
         raise NotImplementedError()
 
-    def delete(self, dry_run: bool):
+    async def delete(self, dry_run: bool):
         raise NotImplementedError()
 
     def __repr__(self):
@@ -100,7 +102,7 @@ class Folder(Node):
     def albums(self) -> Dict[str, 'Album']:
         raise NotImplementedError()
 
-    def delete(self, dry_run: bool):
+    async def delete(self, dry_run: bool):
         raise NotImplementedError()
 
 
@@ -176,5 +178,5 @@ class Album(Node):
         # TODO: More compares?
         return 0
 
-    def delete(self, dry_run: bool):
+    async def delete(self, dry_run: bool):
         raise NotImplementedError()

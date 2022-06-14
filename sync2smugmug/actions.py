@@ -3,7 +3,7 @@ import logging
 from typing import Union, Tuple
 
 from .disk.node import FolderOnDisk, AlbumOnDisk
-from .node import Folder, Album
+from .node import Folder, Album, Node
 from .policy import SyncTypeAction
 from .smugmug.node import FolderOnSmugmug, AlbumOnSmugmug
 
@@ -78,7 +78,7 @@ class UploadAction(AddAction):
 
 
 class RemoveAction(Action):
-    def __init__(self, what_to_remove):
+    def __init__(self, what_to_remove: Node):
         super().__init__()
 
         self.what_to_remove = what_to_remove

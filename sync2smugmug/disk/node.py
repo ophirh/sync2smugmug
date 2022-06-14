@@ -18,14 +18,14 @@ SYNC_DATA_FILENAME: str = 'smugmug_sync.json'
 class OnDisk:
     def __init__(self, relative_path: str, makedirs: bool):
         self.base_dir = config.base_dir
-        self.disk_path = os.path.normpath(os.path.join(self.base_dir, relative_path))
+        self.disk_path = os.path.join(self.base_dir, relative_path, '')  # Add trailing slash to indicate a folder
 
         if makedirs and not os.path.exists(self.disk_path):
             os.makedirs(self.disk_path)
         else:
             assert os.path.exists(self.disk_path) and os.path.isdir(self.disk_path)
 
-    def delete(self, dry_run: bool):
+    async def delete(self, dry_run: bool):
         if not dry_run:
             rmtree(self.disk_path)
 
@@ -133,11 +133,12 @@ class AlbumOnDisk(Album, OnDisk):
         Get last modified time in Unix timestamp. Use the last_sync in meta-data (if available) to prevent redundant
         syncs and properly detect changes
         """
+
         current_disk_modify_date = os.path.getmtime(self.disk_path)
         disk_date_on_last_sync = self.sync_data.get('disk_date', 0)
         sync_date = self.sync_data.get('sync_date', 0)
 
-        if sync_date and abs(current_disk_modify_date - disk_date_on_last_sync) < 20:  # Allow for a few secs time diff
+        if sync_date and abs(current_disk_modify_date - disk_date_on_last_sync) < 1800:  # Allow for 1/2 hour diff
             # Disk was not modified since the last sync. Return last sync date
             return sync_date
         else:

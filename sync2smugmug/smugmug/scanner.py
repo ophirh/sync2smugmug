@@ -5,6 +5,7 @@ from typing import Optional, Union, Tuple, Dict, List
 
 from .connection import SmugMugConnection
 from .node import FolderOnSmugmug, AlbumOnSmugmug
+from ..node import Node
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class SmugmugScanner:
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f'Scanning SmugMug (starting from {self._connection.root_folder_uri})...')
 
-        return await self._scan(node_uri=None, path=os.sep, parent=None, connection=self._connection)
+        return await self._scan(node_uri=None, path=Node.ROOT, parent=None, connection=self._connection)
 
     async def _scan(self,
                     node_uri: Optional[str],

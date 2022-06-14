@@ -56,7 +56,7 @@ class Image:
         :param str relative_path: Relative path of image
         """
         self._album = album
-        self._relative_path = os.path.normpath(relative_path)
+        self._relative_path = relative_path
 
         _, ext = os.path.splitext(self._relative_path)
         self._image_name_converter: DefaultImageNameConverter = image_name_converters[ext.lower()]

@@ -10,7 +10,7 @@ class ImageOnDisk(Image):
 
     @property
     def disk_path(self) -> str:
-        return f'{self.album.base_dir}{self.relative_path}'
+        return os.path.join(self.album.base_dir, self.relative_path)
 
     @property
     def caption(self) -> str:

@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 class DiskScanner:
     def __init__(self, base_dir: str):
+        if not base_dir.endswith(os.sep):
+            base_dir = os.path.join(base_dir, '')
         self.base_dir = base_dir
 
     @timeit
@@ -26,8 +28,8 @@ class DiskScanner:
         # Keep a lookup table to be able to get the node (by path) for quick access during the os.walk
         nodes: Dict[str, Union[FolderOnDisk, AlbumOnDisk]] = {}
 
-        root = FolderOnDisk(parent=None, relative_path='')
-        nodes[os.sep] = root
+        root = FolderOnDisk(parent=None, relative_path=Node.ROOT)
+        nodes[Node.ROOT] = root
 
         for entry in scan_tree(self.base_dir):
             entry: os.DirEntry
@@ -49,7 +51,7 @@ class DiskScanner:
                 # If no parent, skip the entire sub-tree
                 continue
 
-            assert relative_path and parent_path and parent_node
+            assert relative_path is not None and parent_path is not None and parent_node
 
             if parent_node.is_album:
                 # Ignore sub-folders of albums
