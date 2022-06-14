@@ -18,7 +18,7 @@ SYNC_DATA_FILENAME: str = 'smugmug_sync.json'
 class OnDisk:
     def __init__(self, relative_path: str, makedirs: bool):
         self.base_dir = config.base_dir
-        self.disk_path = f'{self.base_dir}{relative_path}'
+        self.disk_path = os.path.normpath(os.path.join(self.base_dir, relative_path))
 
         if makedirs and not os.path.exists(self.disk_path):
             os.makedirs(self.disk_path)

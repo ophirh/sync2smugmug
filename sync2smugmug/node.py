@@ -19,7 +19,7 @@ class Node:
         """
         self._source = source
         self._parent = parent
-        self._relative_path = relative_path or os.sep
+        self._relative_path = os.path.normpath(relative_path or os.sep)
 
     @property
     def parent(self) -> 'Folder':
