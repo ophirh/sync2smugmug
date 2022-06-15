@@ -22,7 +22,11 @@ class DefaultMovieNameConverter(DefaultImageNameConverter):
 
     @classmethod
     def to_smugmug_relative_path(cls, original_name: str) -> str:
-        return original_name + '.MP4' if not original_name.lower().endswith('.mp4') else original_name
+        return (
+            original_name + ".MP4"
+            if not original_name.lower().endswith(".mp4")
+            else original_name
+        )
 
 
 class HeicImageNameConverter(DefaultImageNameConverter):
@@ -33,24 +37,24 @@ class HeicImageNameConverter(DefaultImageNameConverter):
     @classmethod
     def to_smugmug_relative_path(cls, original_name: str) -> str:
         name, ext = os.path.splitext(original_name)
-        return name + '.JPG'
+        return name + ".JPG"
 
 
 # All supported image formats and their assigned converters
 image_name_converters = {
-    '.jpg': DefaultImageNameConverter,
-    '.jpeg': DefaultImageNameConverter,
-    '.avi': DefaultMovieNameConverter,
-    '.mv4': DefaultMovieNameConverter,
-    '.mov': DefaultMovieNameConverter,
-    '.mp4': DefaultMovieNameConverter,
-    '.mts': DefaultMovieNameConverter,
-    '.heic': HeicImageNameConverter,
+    ".jpg": DefaultImageNameConverter,
+    ".jpeg": DefaultImageNameConverter,
+    ".avi": DefaultMovieNameConverter,
+    ".mv4": DefaultMovieNameConverter,
+    ".mov": DefaultMovieNameConverter,
+    ".mp4": DefaultMovieNameConverter,
+    ".mts": DefaultMovieNameConverter,
+    ".heic": HeicImageNameConverter,
 }
 
 
 class Image:
-    def __init__(self, album: 'Album', relative_path: str):
+    def __init__(self, album: "Album", relative_path: str):
         """
         :param Album album: Album this image belongs to
         :param str relative_path: Relative path of image
@@ -59,11 +63,15 @@ class Image:
         self._relative_path = relative_path
 
         _, ext = os.path.splitext(self._relative_path)
-        self._image_name_converter: DefaultImageNameConverter = image_name_converters[ext.lower()]
-        self._smugmug_relative_path = self._image_name_converter.to_smugmug_relative_path(self._relative_path)
+        self._image_name_converter: DefaultImageNameConverter = image_name_converters[
+            ext.lower()
+        ]
+        self._smugmug_relative_path = (
+            self._image_name_converter.to_smugmug_relative_path(self._relative_path)
+        )
 
     @property
-    def album(self) -> 'Album':
+    def album(self) -> "Album":
         return self._album
 
     @property
@@ -89,12 +97,12 @@ class Image:
     @classmethod
     def is_raw_image(cls, f: str) -> bool:
         _, ext = os.path.splitext(f)
-        return ext.lower() in ('.orf', '.crw', '.cr2', '.nef', '.raw', '.dng')
+        return ext.lower() in (".orf", ".crw", ".cr2", ".nef", ".raw", ".dng")
 
     @property
     def is_video(self) -> bool:
         _, ext = os.path.splitext(self.relative_path)
-        return ext.lower() in ('.avi', '.mv4', '.mov', '.mp4', '.mts')
+        return ext.lower() in (".avi", ".mv4", ".mov", ".mp4", ".mts")
 
     @property
     def caption(self) -> str:
@@ -116,7 +124,7 @@ class Image:
     async def delete(self, dry_run: bool):
         raise NotImplementedError()
 
-    def compare(self, other: 'Image') -> int:
+    def compare(self, other: "Image") -> int:
         assert isinstance(other, Image)
 
         # There were several issues with comparing file sizes (especially for movies). Ignored for now
@@ -134,4 +142,4 @@ class Image:
         return hash(self.relative_path)
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__} {self.relative_path}'
+        return f"{self.__class__.__name__} {self.relative_path}"

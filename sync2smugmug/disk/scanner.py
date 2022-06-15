@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class DiskScanner:
     def __init__(self, base_dir: str):
         if not base_dir.endswith(os.sep):
-            base_dir = os.path.join(base_dir, '')
+            base_dir = os.path.join(base_dir, "")
         self.base_dir = base_dir
 
     @timeit
@@ -23,7 +23,7 @@ class DiskScanner:
         :return: The root folder for images on disk
         """
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f'Scanning disk (starting from {self.base_dir})...')
+            logger.debug(f"Scanning disk (starting from {self.base_dir})...")
 
         # Keep a lookup table to be able to get the node (by path) for quick access during the os.walk
         nodes: Dict[str, Union[FolderOnDisk, AlbumOnDisk]] = {}
@@ -34,7 +34,7 @@ class DiskScanner:
         for entry in scan_tree(self.base_dir):
             entry: os.DirEntry
 
-            relative_path = entry.path[len(self.base_dir):]
+            relative_path = entry.path[len(self.base_dir) :]
 
             if self.should_skip(entry, relative_path=relative_path):
                 continue
@@ -80,7 +80,7 @@ class DiskScanner:
             else:
                 # Skip empty dirs
                 if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(f'Empty directory {entry.path}')
+                    logger.debug(f"Empty directory {entry.path}")
 
                 continue
 
@@ -100,15 +100,15 @@ class DiskScanner:
         if not entry.is_dir():
             return True
 
-        if entry.name.startswith('.'):
+        if entry.name.startswith("."):
             return True
 
         basename = entry.name.lower()
 
-        if any(a == basename for a in ('originals', 'lightroom', 'developed')):
+        if any(a == basename for a in ("originals", "lightroom", "developed")):
             return True
 
-        if 'Picasa' in relative_path:
+        if "Picasa" in relative_path:
             return True
 
         return False

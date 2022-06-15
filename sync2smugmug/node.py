@@ -4,8 +4,8 @@ from typing import Dict, List, TypeVar, Generic
 from .utils import cmp
 from .image import Image
 
-FolderType = TypeVar('FolderType', covariant=True)
-AlbumType = TypeVar('AlbumType', covariant=True)
+FolderType = TypeVar("FolderType", covariant=True)
+AlbumType = TypeVar("AlbumType", covariant=True)
 
 
 class Node(Generic[FolderType, AlbumType]):
@@ -14,7 +14,7 @@ class Node(Generic[FolderType, AlbumType]):
     The natural key to a node is its 'relative_path' ('' as the root)
     """
 
-    ROOT = ''
+    ROOT = ""
 
     def __init__(self, source: str, parent: FolderType, relative_path: str):
         """
@@ -32,7 +32,7 @@ class Node(Generic[FolderType, AlbumType]):
 
     @property
     def name(self) -> str:
-        """ Get the object name from its ID """
+        """Get the object name from its ID"""
         return os.path.basename(self.relative_path)
 
     @property
@@ -74,7 +74,7 @@ class Node(Generic[FolderType, AlbumType]):
         raise NotImplementedError()
 
     def __repr__(self):
-        return f'{self.__class__.__name__} {self.relative_path}'
+        return f"{self.__class__.__name__} {self.relative_path}"
 
 
 class Folder(Node[FolderType, AlbumType]):
@@ -89,11 +89,11 @@ class Folder(Node[FolderType, AlbumType]):
         self._albums: Dict[str, AlbumType] = {}
 
     @property
-    def sub_folders(self) -> Dict[str, 'FolderOnDisk']:
+    def sub_folders(self) -> Dict[str, "FolderOnDisk"]:
         return self._sub_folders
 
     @property
-    def albums(self) -> Dict[str, 'AlbumOnDisk']:
+    def albums(self) -> Dict[str, "AlbumOnDisk"]:
         return self._albums
 
     @property
@@ -106,7 +106,7 @@ class Folder(Node[FolderType, AlbumType]):
 
     def stats(self) -> str:
         # Show some stats on the scan
-        return f'{self.folder_count} folders, {self.album_count} albums, {self.image_count} images'
+        return f"{self.folder_count} folders, {self.album_count} albums, {self.image_count} images"
 
     def add_sub_folder(self, sub_folder: FolderType):
         self._sub_folders[sub_folder.relative_path] = sub_folder
@@ -179,7 +179,9 @@ class Album(Node[FolderType, AlbumType]):
 
     async def contains_image(self, image: Image) -> bool:
         assert isinstance(image, Image)
-        return any(i for i in await self.get_images() if i.relative_path == image.relative_path)
+        return any(
+            i for i in await self.get_images() if i.relative_path == image.relative_path
+        )
 
     def compare(self, other: AlbumType) -> int:
         """
@@ -209,7 +211,9 @@ class Album(Node[FolderType, AlbumType]):
         # TODO: Check change in description and other meta-data attributes
         return 0
 
-    async def deep_compare(self, other: AlbumType, shallow_compare_first: bool = True) -> int:
+    async def deep_compare(
+        self, other: AlbumType, shallow_compare_first: bool = True
+    ) -> int:
         if shallow_compare_first:
             i = self.shallow_compare(other)
             if i != 0:

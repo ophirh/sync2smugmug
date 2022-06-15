@@ -15,12 +15,12 @@ class ImageOnDisk(Image):
     @property
     def caption(self) -> str:
         # TODO: Get the Picasa / LightRoom
-        return ''
+        return ""
 
     @property
     def keywords(self) -> str:
         # TODO: Get the Picasa / LightRoom
-        return ''
+        return ""
 
     @property
     def size(self) -> int:

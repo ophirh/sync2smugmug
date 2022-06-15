@@ -6,9 +6,9 @@ logger = logging.getLogger(__name__)
 
 
 def cmp(a, b):
-    if hasattr(a, 'compare'):
+    if hasattr(a, "compare"):
         return a.compare(b)
-    elif hasattr(b, 'compare'):
+    elif hasattr(b, "compare"):
         return -b.compare(a)
     else:
         return (a > b) - (a < b)
@@ -22,7 +22,9 @@ def timeit(f):
         finally:
             elapsed = time.time() - start
             if elapsed > 1:
-                logger.info(f'!---- {f.__name__} execution time: {elapsed:.2f} sec ----!')
+                logger.info(
+                    f"!---- {f.__name__} execution time: {elapsed:.2f} sec ----!"
+                )
 
     return timed
 

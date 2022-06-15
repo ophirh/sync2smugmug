@@ -8,7 +8,7 @@ from typing.io import BinaryIO
 
 def read_string_field(f: BinaryIO) -> str:
     # Read a null terminated string...
-    s = b''
+    s = b""
 
     b = f.read(1)
     while ord(b) != 0:
@@ -19,24 +19,24 @@ def read_string_field(f: BinaryIO) -> str:
 
 
 def read_byte_field(f: BinaryIO):
-    return struct.unpack(b'<B', f.read(1))[0]
+    return struct.unpack(b"<B", f.read(1))[0]
 
 
 def read_2byte_field(f: BinaryIO):
-    return struct.unpack(b'<H', f.read(2))[0]
+    return struct.unpack(b"<H", f.read(2))[0]
 
 
 def read_4byte_field(f: BinaryIO):
-    return struct.unpack(b'<L', f.read(4))[0]
+    return struct.unpack(b"<L", f.read(4))[0]
 
 
 def read_8byte_field(f: BinaryIO):
-    return struct.unpack(b'<Q', f.read(8))[0]
+    return struct.unpack(b"<Q", f.read(8))[0]
 
 
 def read_date_field(f: BinaryIO):
     # Read Microsoft Variant (date as a double)
-    d = struct.unpack(b'<d', f.read(8))[0]
+    d = struct.unpack(b"<d", f.read(8))[0]
     d -= 25569
     ut = round(d * 86400 * 1000)
     return time.gmtime(ut)
@@ -48,25 +48,25 @@ class PMPReader:
         self.entries = self._read(table, field)
 
     def _read(self, table: str, field: str) -> List:
-        with open(os.path.join(self.path, f'{table}_{field}.pmp'), 'rb') as f:
-            if struct.unpack(b'<I', f.read(4))[0] != 0x3fcccccd:
-                raise IOError('Failed magic1')
+        with open(os.path.join(self.path, f"{table}_{field}.pmp"), "rb") as f:
+            if struct.unpack(b"<I", f.read(4))[0] != 0x3FCCCCCD:
+                raise IOError("Failed magic1")
 
-            t = struct.unpack(b'<H', f.read(2))[0]
+            t = struct.unpack(b"<H", f.read(2))[0]
 
-            if struct.unpack(b'<H', f.read(2))[0] != 0x1332:
-                raise IOError('Failed magic2')
+            if struct.unpack(b"<H", f.read(2))[0] != 0x1332:
+                raise IOError("Failed magic2")
 
-            if struct.unpack(b'<I', f.read(4))[0] != 0x2:
-                raise IOError('Failed magic3')
+            if struct.unpack(b"<I", f.read(4))[0] != 0x2:
+                raise IOError("Failed magic3")
 
-            if t != struct.unpack(b'<H', f.read(2))[0]:
-                raise IOError(f'Failed repeat type {t}')
+            if t != struct.unpack(b"<H", f.read(2))[0]:
+                raise IOError(f"Failed repeat type {t}")
 
-            if struct.unpack(b'<H', f.read(2))[0] != 0x1332:
-                raise IOError('Failed magic4')
+            if struct.unpack(b"<H", f.read(2))[0] != 0x1332:
+                raise IOError("Failed magic4")
 
-            num_of_items = struct.unpack(b'<I', f.read(4))[0]
+            num_of_items = struct.unpack(b"<I", f.read(4))[0]
 
             values = []
             for _ in range(num_of_items):
@@ -87,7 +87,7 @@ class PMPReader:
                 elif t == 0x7:
                     values.append(read_4byte_field(f))
                 else:
-                    raise IOError(f'Unknown type: {t}')
+                    raise IOError(f"Unknown type: {t}")
 
             return values
 
@@ -98,11 +98,11 @@ class ThumbIndexDBReader:
         self.dirs, self.images = self._read()
 
     def _read(self) -> Tuple[Dict, List[Dict]]:
-        with open(os.path.join(self.path, 'thumbindex.db'), 'rb') as f:
-            if struct.unpack(b'<I', f.read(4))[0] != 0x40466666:
-                raise IOError('Failed magic')
+        with open(os.path.join(self.path, "thumbindex.db"), "rb") as f:
+            if struct.unpack(b"<I", f.read(4))[0] != 0x40466666:
+                raise IOError("Failed magic")
 
-            num_of_items = struct.unpack('<I', f.read(4))[0]
+            num_of_items = struct.unpack("<I", f.read(4))[0]
 
             dirs = {}
             lookup = {}
@@ -122,16 +122,16 @@ class ThumbIndexDBReader:
                     # Skip virtual copies (for faces)
                     continue
                 else:
-                    image = {'name': name, 'parent': index, 'index': i}
+                    image = {"name": name, "parent": index, "index": i}
                     images.append(image)
 
             # Now link everything together
             for image in images:
-                dir_name = lookup[image['parent']]
-                dirs[dir_name][image['name']] = image
+                dir_name = lookup[image["parent"]]
+                dirs[dir_name][image["name"]] = image
 
                 # Replace image parent index with name
-                image['parent'] = dir_name
+                image["parent"] = dir_name
 
             return dirs, images
 
@@ -149,23 +149,23 @@ class PicasaDB(object):
         thumbs = ThumbIndexDBReader(self.picasa_db_location)
 
         # Pick the interesting fields that we want to collect...
-        captions = PMPReader(self.picasa_db_location, 'imagedata', 'caption').entries
-        texts = PMPReader(self.picasa_db_location, 'imagedata', 'text').entries
+        captions = PMPReader(self.picasa_db_location, "imagedata", "caption").entries
+        texts = PMPReader(self.picasa_db_location, "imagedata", "text").entries
 
         # Merge the image data into the index
         for image in thumbs.images:
             try:
-                caption = captions[image['index']]
+                caption = captions[image["index"]]
                 if caption and len(caption) > 0:
-                    image['caption'] = caption
+                    image["caption"] = caption
             except IndexError:
                 # Reaching EOF...
                 pass
 
             try:
-                description = texts[image['index']]
+                description = texts[image["index"]]
                 if description and len(description) > 0:
-                    image['text'] = description
+                    image["text"] = description
             except IndexError:
                 # Reaching EOF...
                 pass
@@ -175,16 +175,16 @@ class PicasaDB(object):
         return thumbs
 
     def describe(self):
-        print('Dirs:')
+        print("Dirs:")
         for d in self.thumbs.dirs.keys():
             print(d)
 
     def get_image_caption(self, folder: str, name: str) -> Optional[str]:
-        if not folder.endswith('\\'):
-            folder += '\\'
+        if not folder.endswith("\\"):
+            folder += "\\"
 
         try:
-            return self.thumbs.dirs[folder][name]['caption']
+            return self.thumbs.dirs[folder][name]["caption"]
         except KeyError:
             return None
 
@@ -197,14 +197,14 @@ class PicasaAlbum:
     def __init__(self, album_path: str, files: List):
         self.ini_files = []
 
-        if '.picasa.ini' in files:
+        if ".picasa.ini" in files:
             picasa_ini1 = configparser.ConfigParser()
-            picasa_ini1.read(os.path.join(album_path, '.picasa.ini'))
+            picasa_ini1.read(os.path.join(album_path, ".picasa.ini"))
             self.ini_files.append(picasa_ini1)
 
-        if 'Picasa.ini' in files:
+        if "Picasa.ini" in files:
             picasa_ini2 = configparser.ConfigParser()
-            picasa_ini2.read(os.path.join(album_path, 'Picasa.ini'))
+            picasa_ini2.read(os.path.join(album_path, "Picasa.ini"))
             self.ini_files.append(picasa_ini2)
 
     def _get_attribute(self, section, attribute):
@@ -219,7 +219,7 @@ class PicasaAlbum:
         return None
 
     def get_album_description(self) -> str:
-        return self._get_attribute('Picasa', 'Description')
+        return self._get_attribute("Picasa", "Description")
 
     def get_album_location(self) -> str:
-        return self._get_attribute('Picasa', 'Location')
+        return self._get_attribute("Picasa", "Location")
