@@ -27,7 +27,7 @@ class AddAction(Action):
         self.message = message or ''
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__} (add {self.what_to_add} to {self.parent_to_add_to} ({self.message})'
+        return f'{self.__class__.__name__} (add {self.what_to_add} to {self.parent_to_add_to})'
 
     async def perform(self, dry_run: bool):
         raise NotImplementedError()
@@ -43,6 +43,9 @@ class DownloadAction(AddAction):
         :param parent_to_add_to: Disk node of parent directory
         """
         super().__init__(what_to_add, parent_to_add_to, message)
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__} ({self.what_to_add} to {self.parent_to_add_to})'
 
     async def perform(self, dry_run: bool):
         """
@@ -67,14 +70,15 @@ class UploadAction(AddAction):
         """
         super().__init__(what_to_add, parent_to_add_to, message)
 
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__} ({self.what_to_add} to {self.parent_to_add_to})'
+
     async def perform(self, dry_run: bool):
         assert isinstance(self.what_to_add, (FolderOnDisk, AlbumOnDisk))
         assert isinstance(self.parent_to_add_to, FolderOnSmugmug)
 
         logger.info(f'Upload {self.what_to_add} to {self.parent_to_add_to} ({self.message})')
-
-        if not dry_run:
-            await self.parent_to_add_to.upload(from_disk_node=self.what_to_add, dry_run=dry_run)
+        await self.parent_to_add_to.upload(from_disk_node=self.what_to_add, dry_run=dry_run)
 
 
 class RemoveAction(Action):
@@ -84,7 +88,7 @@ class RemoveAction(Action):
         self.what_to_remove = what_to_remove
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__} (remove {self.what_to_remove})'
+        return f'{self.__class__.__name__} ({self.what_to_remove})'
 
     async def perform(self, dry_run: bool):
         # Simply delete the subtree
@@ -117,6 +121,9 @@ class SyncAlbumsAction(Action):
         self.disk_album = disk_album
         self.smugmug_album = smugmug_album
         self.sync_action = sync_type
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__} ({self.disk_album} and {self.smugmug_album} [{self.sync_action}])'
 
     # noinspection DuplicatedCode
     async def perform(self, dry_run: bool):
@@ -167,6 +174,9 @@ class UpdateAlbumSyncDataAction(Action):
         self.disk_album: AlbumOnDisk = disk_album
         self.smugmug_album: AlbumOnSmugmug = smugmug_album
 
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__} (for {self.disk_album})'
+
     async def perform(self, dry_run: bool):
         self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)
 
@@ -180,6 +190,9 @@ class RemoveOnlineDuplicatesAction(Action):
         super().__init__()
 
         self.smugmug_album: AlbumOnSmugmug = smugmug_album
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__} (in {self.smugmug_album})'
 
     async def perform(self, dry_run: bool):
         await self.smugmug_album.remove_duplicates(dry_run=dry_run)

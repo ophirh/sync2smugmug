@@ -117,11 +117,8 @@ class FolderOnSmugmug(Folder, OnSmugmug):
             await asyncio.gather(*tasks)
 
         else:
-            if not dry_run:
-                new_node_record = \
-                    await self._album_create(parent_folder=self, album_on_disk=from_disk_node)
-            else:
-                new_node_record = {}
+            new_node_record = \
+                await self._album_create(parent_folder=self, album_on_disk=from_disk_node) if not dry_run else {}
 
             new_node = AlbumOnSmugmug(parent=self,
                                       relative_path=from_disk_node.relative_path,
@@ -136,8 +133,8 @@ class FolderOnSmugmug(Folder, OnSmugmug):
 
     async def delete(self, dry_run: bool):
         # Remove the album from the virtual tree
-        if self.name in self.parent.sub_folders:
-            del self.parent.sub_folders[self.name]
+        if self.parent:
+            self.parent.remove_sub_folder(self)
 
         if not dry_run:
             await self.connection.request_delete(self.uri)
@@ -397,9 +394,9 @@ class AlbumOnSmugmug(Album, OnSmugmug):
             raise
 
     async def delete(self, dry_run: bool):
-        # Remove the album from the virtual tree
-        if self.name in self.parent.albums:
-            del self.parent.albums[self.name]
+        # Remove the album from the virtual tree of its parent
+        if self.parent:
+            self.parent.remove_album(self)
 
         if not dry_run:
             await self.connection.request_delete(self.album_uri)

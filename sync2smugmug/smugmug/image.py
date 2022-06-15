@@ -34,6 +34,7 @@ class ImageOnSmugmug(Image):
         return self.record['OriginalSize']
 
     async def delete(self, dry_run: bool):
+        logger.info(f"Deleting {self}")
+
         if not dry_run:
-            logger.info(f"Deleting {self}")
             await self.album.connection.request_delete(self.image_uri)
