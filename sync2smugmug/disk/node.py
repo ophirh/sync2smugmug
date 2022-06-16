@@ -97,6 +97,13 @@ class FolderOnDisk(Folder["FolderOnDisk", "AlbumOnDisk"], OnDisk):
 
         return new_node
 
+    async def delete(self, dry_run: bool):
+        # Remove the album from the virtual tree of its parent
+        if self.parent:
+            self.parent.remove_sub_folder(self)
+
+        await OnDisk.delete(self, dry_run)
+
 
 # noinspection PyAbstractClass
 class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk"], OnDisk):
