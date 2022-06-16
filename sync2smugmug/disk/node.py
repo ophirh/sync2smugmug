@@ -198,3 +198,10 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk"], OnDisk):
         p = os.path.join(self.disk_path, SYNC_DATA_FILENAME)
         if os.path.exists(p):
             os.remove(p)
+
+    async def delete(self, dry_run: bool):
+        # Remove the album from the virtual tree of its parent
+        if self.parent:
+            self.parent.remove_album(self)
+
+        await OnDisk.delete(self, dry_run)

@@ -120,7 +120,7 @@ class Folder(Node[FolderType, AlbumType]):
             parent = parent.parent
 
     def remove_sub_folder(self, sub_folder: FolderType):
-        del self._sub_folders[sub_folder.relative_path]
+        del self._sub_folders[sub_folder.name]
 
         # Update counts (go up the hierarchy)
         parent: Folder = self.parent
@@ -143,7 +143,7 @@ class Folder(Node[FolderType, AlbumType]):
             parent = parent.parent
 
     def remove_album(self, album: AlbumType):
-        del self._albums[album.relative_path]
+        del self._albums[album.name]
 
         image_count = album.image_count
 
