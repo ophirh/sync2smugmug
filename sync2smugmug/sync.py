@@ -14,38 +14,26 @@ from .actions import (
     RemoveOnlineDuplicatesAction,
 )
 from .config import config
-from .disk.scanner import DiskScanner, FolderOnDisk, AlbumOnDisk
+from .disk.scanner import FolderOnDisk, AlbumOnDisk
 from .node import Album, Folder
 from .policy import SyncTypeAction
-from .smugmug.scanner import SmugmugScanner, FolderOnSmugmug, AlbumOnSmugmug
-from .smugmug.connection import SmugMugConnection
+from .smugmug.scanner import FolderOnSmugmug, AlbumOnSmugmug
 
 logger = logging.getLogger(__name__)
 
 
-async def scan(connection: SmugMugConnection) -> Tuple[FolderOnDisk, FolderOnSmugmug]:
-    """
-    Scan both disk and Smugmug to create two virtual trees of both systems
-    """
-
-    on_disk = DiskScanner(base_dir=config.base_dir).scan()
-    logger.info(f"Scan results (on disk): {on_disk.stats()}")
-
-    on_smugmug = await SmugmugScanner(connection=connection).scan()
-    logger.info(f"Scan results (on smugmug): {on_smugmug.stats()}")
-
-    return on_disk, on_smugmug
-
-
-async def sync(on_disk: FolderOnDisk, on_smugmug: FolderOnSmugmug) -> List[Action]:
+async def sync(
+    on_disk: FolderOnDisk,
+    on_smugmug: FolderOnSmugmug,
+    sync_type: Tuple[SyncTypeAction, ...],
+) -> List[Action]:
     """
     Given scan results, generates a set of actions required to sync between the disk and smugmug
 
     :param on_disk: Root for on disk scans
     :param on_smugmug: Root for on smugmug scans
+    :param sync_type: Actions to perform
     """
-
-    sync_type = config.sync
 
     actions: List[Action] = []
 
@@ -227,7 +215,7 @@ async def sync_albums(
         await execute_action(action)
 
     elif content_appears_the_same:
-        if SyncTypeAction.DELETE_DUPLICATES in sync_type:
+        if SyncTypeAction.DELETE_ONLINE_DUPLICATES in sync_type:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
                     f"[~~] {from_album.relative_path} - Checking for duplicates..."

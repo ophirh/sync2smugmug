@@ -94,6 +94,7 @@ def parse_config() -> Config:
             "local_backup",
             "local_backup_clean",
             "two_way_sync_no_deletes",
+            "test",
         ],
     )
     arg_parser.add_argument(

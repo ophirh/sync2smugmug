@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, TypeVar, Generic
+from typing import Dict, List, TypeVar, Generic, Generator
 
 from .utils import cmp
 from .image import Image
@@ -89,11 +89,11 @@ class Folder(Node[FolderType, AlbumType]):
         self._albums: Dict[str, AlbumType] = {}
 
     @property
-    def sub_folders(self) -> Dict[str, "FolderOnDisk"]:
+    def sub_folders(self) -> Dict[str, FolderType]:
         return self._sub_folders
 
     @property
-    def albums(self) -> Dict[str, "AlbumOnDisk"]:
+    def albums(self) -> Dict[str, AlbumType]:
         return self._albums
 
     @property
@@ -156,6 +156,17 @@ class Folder(Node[FolderType, AlbumType]):
 
     async def delete(self, dry_run: bool):
         raise NotImplementedError()
+
+    def iter_albums(self) -> Generator[AlbumType, None, None]:
+        yield from self._iter_albums(self)
+
+    @classmethod
+    def _iter_albums(cls, from_album: AlbumType) -> Generator[AlbumType, None, None]:
+        for a in from_album.albums.values():
+            yield a
+
+        for sf in from_album.sub_folders.values():
+            yield from cls._iter_albums(sf)
 
 
 class Album(Node[FolderType, AlbumType]):

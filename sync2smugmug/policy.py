@@ -7,19 +7,21 @@ class SyncTypeAction(Enum):
     UPLOAD = "UPLOAD"
     DELETE_ON_DISK = "DELETE_ON_DISK"
     DELETE_ON_CLOUD = "DELETE_ON_CLOUD"
-    DELETE_DUPLICATES = "DELETE_DUPLICATES"
+    DELETE_ONLINE_DUPLICATES = "DELETE_ONLINE_DUPLICATES"
+    OPTIMIZE_DISK = "OPTIMIZE_DISK"
 
 
 class SyncType:
     @classmethod
     def local_backup(cls) -> Tuple[SyncTypeAction, ...]:
-        return SyncTypeAction.DOWNLOAD,
+        return (SyncTypeAction.DOWNLOAD,)
 
     @classmethod
     def local_backup_clean(cls) -> Tuple[SyncTypeAction, ...]:
         return (
             SyncTypeAction.DOWNLOAD,
             SyncTypeAction.DELETE_ON_DISK,
+            SyncTypeAction.OPTIMIZE_DISK,
         )
 
     @classmethod
@@ -31,7 +33,7 @@ class SyncType:
         return (
             SyncTypeAction.UPLOAD,
             SyncTypeAction.DELETE_ON_CLOUD,
-            SyncTypeAction.DELETE_DUPLICATES,
+            SyncTypeAction.DELETE_ONLINE_DUPLICATES,
         )
 
     @classmethod
@@ -43,3 +45,10 @@ class SyncType:
             SyncTypeAction.UPLOAD,
             SyncTypeAction.DOWNLOAD,
         )
+
+    @classmethod
+    def test(cls) -> Tuple[SyncTypeAction, ...]:
+        """
+        For testing...
+        """
+        return (SyncTypeAction.OPTIMIZE_DISK,)
