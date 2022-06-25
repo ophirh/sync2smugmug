@@ -56,7 +56,7 @@ class FolderOnSmugmug(Folder, OnSmugmug):
 
     @property
     def parent(self) -> "FolderOnSmugmug":
-        assert isinstance(self._parent, FolderOnSmugmug)
+        assert self._parent is None or isinstance(self._parent, FolderOnSmugmug)
         return self._parent
 
     @property

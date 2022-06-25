@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Dict, List, TypeVar, Generic, Generator
 
 from .utils import cmp
@@ -6,6 +7,8 @@ from .image import Image
 
 FolderType = TypeVar("FolderType", covariant=True)
 AlbumType = TypeVar("AlbumType", covariant=True)
+
+DATE_ALBUM_PATTERN = re.compile(r"[12][90]\d\d_[0-1]\d_[0-3]\d - .*")
 
 
 class Node(Generic[FolderType, AlbumType]):
@@ -62,6 +65,10 @@ class Node(Generic[FolderType, AlbumType]):
     @property
     def is_folder(self) -> bool:
         return not self.is_album
+
+    @property
+    def is_date_album(self) -> bool:
+        return re.match(DATE_ALBUM_PATTERN, self.name) is not None
 
     @property
     def last_modified(self) -> float:

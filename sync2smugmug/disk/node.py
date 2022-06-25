@@ -2,7 +2,7 @@ import itertools
 import json
 import logging
 import os
-from typing import List, Optional, Dict, Union
+from typing import List, Optional, Dict, Union, Generator
 
 from shutil import rmtree
 
@@ -127,22 +127,23 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk"], OnDisk):
             [
                 e
                 for e in os.scandir(self.disk_path)
-                if ImageOnDisk.is_image(self.disk_path, e.name)
+                if ImageOnDisk.check_is_image(self.disk_path, e.name)
             ]
         )
 
     async def get_images(self) -> List[ImageOnDisk]:
         if self._images is None:
             # Lazy initialize images
-            self._images = [
-                ImageOnDisk(
-                    album=self, relative_path=os.path.join(self.relative_path, f)
-                )
-                for f in os.listdir(self.disk_path)
-                if ImageOnDisk.is_image(self.disk_path, f)
-            ]
+            self._images = [i for i in self.iter_images()]
 
         return self._images
+
+    def iter_images(self) -> Generator[ImageOnDisk, None, None]:
+        for f in os.listdir(self.disk_path):
+            if ImageOnDisk.check_is_image(self.disk_path, f):
+                yield ImageOnDisk(
+                    album=self, relative_path=os.path.join(self.relative_path, f)
+                )
 
     def reload_images(self):
         self._images = None  # Reload images on next call
@@ -158,9 +159,10 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk"], OnDisk):
         disk_date_on_last_sync = self.sync_data.get("disk_date", 0)
         sync_date = self.sync_data.get("sync_date", 0)
 
+        # Allow for 1/2 hour diff
         if (
             sync_date and abs(current_disk_modify_date - disk_date_on_last_sync) < 1800
-        ):  # Allow for 1/2 hour diff
+        ):
             # Disk was not modified since the last sync. Return last sync date
             return sync_date
         else:
@@ -170,7 +172,7 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk"], OnDisk):
     @classmethod
     def has_images(cls, disk_path: str) -> bool:
         return any(
-            True for f in os.listdir(disk_path) if ImageOnDisk.is_image(disk_path, f)
+            True for f in os.listdir(disk_path) if ImageOnDisk.check_is_image(disk_path, f)
         )
 
     def _load_sync_data(self) -> Dict:

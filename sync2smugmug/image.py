@@ -56,7 +56,7 @@ image_name_converters = {
 class Image:
     def __init__(self, album: "Album", relative_path: str):
         """
-        :param Album album: Album this image belongs to
+        :param album: Album this image belongs to
         :param str relative_path: Relative path of image
         """
         self._album = album
@@ -86,7 +86,7 @@ class Image:
         return self._smugmug_relative_path
 
     @classmethod
-    def is_image(cls, path: str, f: str) -> bool:
+    def check_is_image(cls, path: str, f: str) -> bool:
         _, ext = os.path.splitext(f)
         # Unknown file types: '.3gp',
         if ext.lower() not in image_name_converters:
@@ -94,10 +94,18 @@ class Image:
 
         return os.stat(os.path.join(path, f)).st_size > 0
 
+    @property
+    def is_image(self) -> bool:
+        return self.check_is_image(self.album.disk_path, self.name)
+
     @classmethod
-    def is_raw_image(cls, f: str) -> bool:
+    def check_is_raw_image(cls, f: str) -> bool:
         _, ext = os.path.splitext(f)
         return ext.lower() in (".orf", ".crw", ".cr2", ".nef", ".raw", ".dng")
+
+    @property
+    def is_raw_image(self) -> bool:
+        return self.check_is_raw_image(self.name)
 
     @property
     def is_video(self) -> bool:

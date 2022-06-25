@@ -26,7 +26,10 @@ class SyncType:
 
     @classmethod
     def online_backup(cls) -> Tuple[SyncTypeAction, ...]:
-        return (SyncTypeAction.UPLOAD,)
+        return (
+            SyncTypeAction.UPLOAD,
+            SyncTypeAction.OPTIMIZE_DISK,
+        )
 
     @classmethod
     def online_backup_clean(cls) -> Tuple[SyncTypeAction, ...]:

@@ -1,8 +1,9 @@
 import logging
 import os
-from typing import List, Type
+from typing import List, Type, Dict, Tuple, Set
 
 from .node import FolderOnDisk, AlbumOnDisk, SYNC_DATA_FILENAME
+from .image import ImageOnDisk
 
 logger = logging.getLogger(__name__)
 
@@ -67,15 +68,90 @@ class DetectAlbumDuplicates(Optimizer):
 
 class DetectImageDuplicates(Optimizer):
     """
-    Find images with same name and device and remove them (oldest image stays). Exception are non date galleries (which are
-    designed to contain duplicates)
+    Find images with same name and device and remove them (the oldest image stays).
+    Exception are non date galleries (which are designed to contain duplicates)
+
+    This is an attempt to find duplicates across albums (hence indexed by name). The challenge is that photos coming
+    from different cameras are not always unique (neither between devices nor even within a device). This is why
+    additional mata data is used to determine if images are indeed identical.
     """
 
     @classmethod
     async def perform(cls, on_disk: FolderOnDisk, dry_run: bool) -> bool:
-        # 2. Scan the disk and index on images (per device) to identify duplicates.
-        # TODO
-        return False
+        # To minimize the time (and memory) requires to get metadata - we will do this in two passes.
+        photos_by_name: Set[str] = set()
+        duplicate_candidates: List[ImageOnDisk] = []
+
+        # Pass #1 - picks up all the duplicate candidates (based on name only - without metadata)
+        for album in on_disk.iter_albums():
+            if not album.is_date_album:
+                # Skip any non-date albums (other albums like yearly collections have duplicates on purpose)
+                continue
+
+            for image in album.iter_images():
+                if image.name in photos_by_name:
+                    # Name already exists... we need to check for duplicates
+                    duplicate_candidates.append(image)
+                else:
+                    photos_by_name.add(image.name)
+
+        # Pass #2 - examine the metadata of each of the candidates (a smaller set) to identify actual duplicates
+        # (use make, model & size)
+        index: Dict[Tuple[str, int, str, str], ImageOnDisk] = {}
+
+        changed = False
+
+        for image in duplicate_candidates:
+            key = (
+                image.name,
+                image.size,
+                image.camera_model,
+                image.camera_make,
+            )
+
+            if key in index:
+                logger.info(
+                    f"Duplicate detected for image {image} with {index[key]} "
+                    f"[{image.camera_make} / {image.camera_model}]"
+                )
+
+                if not dry_run:
+                    # Actually delete (the newer image)
+                    await image.delete(dry_run=dry_run)
+                    changed = True
+
+            else:
+                index[key] = image
+
+        if not changed:
+            logger.info("No image duplicates detected")
+
+        return changed
+
+
+class DetectSimilarImages(Optimizer):
+    """
+    Detect images (within albums) that are similar to each other
+    """
+
+    @classmethod
+    async def perform(cls, on_disk: FolderOnDisk, dry_run: bool) -> bool:
+        changed = False
+
+        for album in on_disk.iter_albums():
+            if not album.is_date_album:
+                # Skip any non-date albums (other albums like yearly collections have duplicates on purpose)
+                continue
+
+            images = await album.get_images()
+
+            # TODO
+            pass
+
+        if not changed:
+            logger.info("No image similarities detected")
+
+        return changed
 
 
 async def optimize(on_disk: FolderOnDisk, dry_run: bool) -> bool:
@@ -83,9 +159,12 @@ async def optimize(on_disk: FolderOnDisk, dry_run: bool) -> bool:
     optimizations: List[Type[Optimizer]] = [
         DetectAlbumDuplicates,
         DetectImageDuplicates,
+        # DetectSimilarImages,
     ]
 
     for optimizer in optimizations:
+        logger.info(f"Running optimization {optimizer}")
+        logger.info("-" * 80)
         if await optimizer.perform(on_disk=on_disk, dry_run=dry_run):
             return True
 
