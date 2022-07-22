@@ -1,17 +1,18 @@
 import os
 import re
-from typing import Dict, List, TypeVar, Generic, Generator
+from typing import Dict, List, TypeVar, Generic, Generator, Optional
 
 from .utils import cmp
 from .image import Image
 
 FolderType = TypeVar("FolderType", covariant=True)
 AlbumType = TypeVar("AlbumType", covariant=True)
+ImageType = TypeVar("ImageType", covariant=True)
 
 DATE_ALBUM_PATTERN = re.compile(r"[12][90]\d\d_[0-1]\d_[0-3]\d - .*")
 
 
-class Node(Generic[FolderType, AlbumType]):
+class Node(Generic[FolderType, AlbumType, ImageType]):
     """
     Represents a node (folder, album or page) in the system - or a subtree of the hierarchy.
     The natural key to a node is its 'relative_path' ('' as the root)
@@ -84,7 +85,7 @@ class Node(Generic[FolderType, AlbumType]):
         return f"{self.__class__.__name__} {self.relative_path}"
 
 
-class Folder(Node[FolderType, AlbumType]):
+class Folder(Node[FolderType, AlbumType, ImageType]):
     def __init__(self, source: str, parent: FolderType, relative_path: str):
         super().__init__(source, parent, relative_path)
 
@@ -116,7 +117,7 @@ class Folder(Node[FolderType, AlbumType]):
         return f"{self.folder_count} folders, {self.album_count} albums, {self.image_count} images"
 
     def add_sub_folder(self, sub_folder: FolderType):
-        self._sub_folders[sub_folder.relative_path] = sub_folder
+        self._sub_folders[sub_folder.name] = sub_folder
 
         # Update counts (go up the hierarchy)
         parent: Folder = self.parent
@@ -138,7 +139,7 @@ class Folder(Node[FolderType, AlbumType]):
             parent = parent.parent
 
     def add_album(self, album: AlbumType):
-        self._albums[album.relative_path] = album
+        self._albums[album.name] = album
 
         image_count = album.image_count
 
@@ -176,9 +177,11 @@ class Folder(Node[FolderType, AlbumType]):
             yield from cls._iter_albums(sf)
 
 
-class Album(Node[FolderType, AlbumType]):
+class Album(Node[FolderType, AlbumType, ImageType]):
     def __init__(self, source: str, parent: Folder, relative_path: str):
         super().__init__(source, parent, relative_path)
+
+        self._images: Optional[List[ImageType]] = None
 
     @property
     def last_modified(self) -> float:
@@ -188,14 +191,17 @@ class Album(Node[FolderType, AlbumType]):
     def is_album(self) -> bool:
         return True
 
-    async def get_images(self) -> List[Image]:
+    async def get_images(self) -> List[ImageType]:
+        """
+        Returns album images (lazy load for performance)
+        """
         raise NotImplementedError()
 
     @property
     def image_count(self) -> int:
         raise NotImplementedError()
 
-    async def contains_image(self, image: Image) -> bool:
+    async def contains_image(self, image: ImageType) -> bool:
         assert isinstance(image, Image)
         return any(
             i for i in await self.get_images() if i.relative_path == image.relative_path

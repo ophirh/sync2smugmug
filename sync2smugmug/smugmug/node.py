@@ -38,7 +38,7 @@ class OnSmugmug:
         raise NotImplementedError()
 
 
-class FolderOnSmugmug(Folder, OnSmugmug):
+class FolderOnSmugmug(Folder["FolderOnSmugmug", "AlbumOnSmugmug", "ImageOnSmugmug"], OnSmugmug):
     def __init__(
         self,
         parent: Optional["FolderOnSmugmug"],
@@ -118,7 +118,7 @@ class FolderOnSmugmug(Folder, OnSmugmug):
                 record=new_node_record,
             )
 
-            self.sub_folders[new_node.relative_path] = new_node
+            self.sub_folders[new_node.name] = new_node
 
             tasks = []
 
@@ -146,7 +146,7 @@ class FolderOnSmugmug(Folder, OnSmugmug):
                 record=new_node_record,
             )
 
-            self.albums[new_node.relative_path] = new_node
+            self.albums[new_node.name] = new_node
 
             # Upload the images for this album
             await new_node.upload_images(
@@ -227,7 +227,7 @@ class FolderOnSmugmug(Folder, OnSmugmug):
         return r["Album"]
 
 
-class AlbumOnSmugmug(Album, OnSmugmug):
+class AlbumOnSmugmug(Album["FolderOnSmugmug", "AlbumOnSmugmug", "ImageOnSmugmug"], OnSmugmug):
     def __init__(
         self,
         parent: FolderOnSmugmug,
@@ -237,8 +237,6 @@ class AlbumOnSmugmug(Album, OnSmugmug):
     ):
         Album.__init__(self, "Smug", parent, relative_path)
         OnSmugmug.__init__(self, record=record, parent=parent, connection=connection)
-
-        self._images = None
 
     @property
     def parent(self) -> FolderOnSmugmug:

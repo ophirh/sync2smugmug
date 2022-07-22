@@ -33,7 +33,7 @@ class OnDisk:
 
 
 # noinspection PyAbstractClass
-class FolderOnDisk(Folder["FolderOnDisk", "AlbumOnDisk"], OnDisk):
+class FolderOnDisk(Folder["FolderOnDisk", "AlbumOnDisk", "ImageOnDisk"], OnDisk):
     def __init__(
         self,
         parent: Optional["FolderOnDisk"],
@@ -76,9 +76,10 @@ class FolderOnDisk(Folder["FolderOnDisk", "AlbumOnDisk"], OnDisk):
                 from_smugmug_node.albums.values(),
                 from_smugmug_node.sub_folders.values(),
             ):
+                # Do this synchronously to make sure we complete one album/folder before moving to the next
                 await new_node.download(from_smugmug_node=sub_node, dry_run=dry_run)
 
-            self.sub_folders[new_node.relative_path] = new_node
+            self.sub_folders[new_node.name] = new_node
 
         # Case #2 - This is an album - we need to download its images
         else:
@@ -93,7 +94,7 @@ class FolderOnDisk(Folder["FolderOnDisk", "AlbumOnDisk"], OnDisk):
                 to_album_on_disk=new_node, dry_run=dry_run
             )
 
-            self.albums[new_node.relative_path] = new_node
+            self.albums[new_node.name] = new_node
 
         return new_node
 
@@ -106,7 +107,7 @@ class FolderOnDisk(Folder["FolderOnDisk", "AlbumOnDisk"], OnDisk):
 
 
 # noinspection PyAbstractClass
-class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk"], OnDisk):
+class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk", "ImageOnDisk"], OnDisk):
     def __init__(
         self, parent: FolderOnDisk, relative_path: str, makedirs: bool = False
     ):
@@ -114,7 +115,6 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk"], OnDisk):
         OnDisk.__init__(self, relative_path=self.relative_path, makedirs=makedirs)
 
         self.sync_data: Dict = self._load_sync_data()
-        self._images: Optional[List[ImageOnDisk]] = None
 
     @property
     def parent(self) -> FolderOnDisk:
@@ -160,9 +160,7 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk"], OnDisk):
         sync_date = self.sync_data.get("sync_date", 0)
 
         # Allow for 1/2 hour diff
-        if (
-            sync_date and abs(current_disk_modify_date - disk_date_on_last_sync) < 1800
-        ):
+        if sync_date and abs(current_disk_modify_date - disk_date_on_last_sync) < 1800:
             # Disk was not modified since the last sync. Return last sync date
             return sync_date
         else:
@@ -172,7 +170,9 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk"], OnDisk):
     @classmethod
     def has_images(cls, disk_path: str) -> bool:
         return any(
-            True for f in os.listdir(disk_path) if ImageOnDisk.check_is_image(disk_path, f)
+            True
+            for f in os.listdir(disk_path)
+            if ImageOnDisk.check_is_image(disk_path, f)
         )
 
     def _load_sync_data(self) -> Dict:
@@ -184,7 +184,7 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk"], OnDisk):
                     return json.load(f)
 
             except Exception:
-                # On any error reading the JSON, just delete it (we will sync again)
+                # On any error reading the JSON, just delete it (this will force to sync again)
                 self.delete_sync_data()
 
         else:
