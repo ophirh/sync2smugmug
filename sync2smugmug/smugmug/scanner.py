@@ -6,6 +6,7 @@ from typing import Optional, Union, Tuple, Dict, List
 from .connection import SmugMugConnection
 from .node import FolderOnSmugmug, AlbumOnSmugmug
 from ..node import Node
+from ..utils import timeit
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ class SmugmugScanner:
     def __init__(self, connection: SmugMugConnection):
         self._connection = connection
 
+    @timeit
     async def scan(self) -> FolderOnSmugmug:
         """
         Discover hierarchy of folders and albums on Smugmug
@@ -127,11 +129,11 @@ class SmugmugScanner:
 
         if with_children:
             if "Folders" in folder["Uris"]:
-                sub_folders = await self._connection.unpack_pagination(
+                sub_folders = await self._connection.paginate(
                     folder["Uris"]["Folders"]["Uri"], object_name="Folder"
                 )
 
-            albums = await self._connection.unpack_pagination(
+            albums = await self._connection.paginate(
                 folder["Uris"]["FolderAlbums"]["Uri"], object_name="Album"
             )
 

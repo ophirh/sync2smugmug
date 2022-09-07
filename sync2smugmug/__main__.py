@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from .config import config
-from .disk.optimizer import optimize
+from .disk.pre_process import pre_process
 from .disk.scanner import DiskScanner
 from .policy import SyncTypeAction
 from .smugmug.connection import SmugMugConnection
@@ -27,12 +27,13 @@ async def main():
     sync_type = config.sync
 
     async with connection:
-        on_disk = DiskScanner(base_dir=config.base_dir).scan()
+        on_disk = await DiskScanner(base_dir=config.base_dir).scan()
 
-        if SyncTypeAction.OPTIMIZE_DISK in sync_type:
-            # Loop through disk scanning until no optimization left
-            while await optimize(on_disk, dry_run=config.dry_run):
-                on_disk = DiskScanner(base_dir=config.base_dir).scan()
+        if SyncTypeAction.PRE_PROCESS_DISK in sync_type:
+            # Loop through disk scanning until no pre-processing is left to do left
+            # After each pre-process step - rebuild (re-scan) the disk to create a fresh state
+            while await pre_process(on_disk, dry_run=config.dry_run):
+                on_disk = await DiskScanner(base_dir=config.base_dir).scan()
 
         logger.info(f"Scan results (on disk): {on_disk.stats()}")
 

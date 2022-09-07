@@ -15,7 +15,11 @@ class Config:
         assert os.path.exists(
             self.base_dir
         ), f"Base dir {self.base_dir} does not exist!"
-        # assert os.path.exists(self.picasa_db_location), f'Picasa DB {self.picasa_db_location} does not exist!'
+
+        if self.iphone_photos_location:
+            assert os.path.exists(
+                self.iphone_photos_location
+            ), f"iPhone photos dir {self.iphone_photos_location} does not exist!"
 
         # Configure logger
         logging.basicConfig(
@@ -35,11 +39,11 @@ class Config:
 
     @property
     def base_dir(self) -> str:
-        return self._args.base_dir
+        return os.path.expanduser(self._args.base_dir)
 
     @property
-    def picasa_db_location(self) -> str:
-        return self._args.picasa_db_location
+    def iphone_photos_location(self) -> str:
+        return os.path.expanduser(self._args.iphone_photos_location)
 
     @property
     def account(self) -> str:
@@ -101,7 +105,9 @@ def parse_config() -> Config:
         "--base_dir", required=True, help="Full path to pictures folder"
     )
     arg_parser.add_argument(
-        "--picasa_db_location", required=False, help="Full path to picasa DB"
+        "--iphone_photos_location",
+        required=False,
+        help="Full path of iPhone photos (export) folder",
     )
     arg_parser.add_argument(
         "--account", required=True, help="Name (nickname) of SmugMug account"

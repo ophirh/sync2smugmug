@@ -1,10 +1,10 @@
 import logging
 import os
-from typing import Dict, Union, Optional
+from typing import Dict, Union, Optional, Generator
 
 from .node import FolderOnDisk, AlbumOnDisk
 from ..node import Node
-from ..utils import timeit, scan_tree
+from ..utils import timeit
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class DiskScanner:
         self.base_dir = base_dir
 
     @timeit
-    def scan(self) -> FolderOnDisk:
+    async def scan(self) -> FolderOnDisk:
         """
         Discover hierarchy of folders and albums on disk
 
@@ -31,9 +31,7 @@ class DiskScanner:
         root = FolderOnDisk(parent=None, relative_path=Node.ROOT)
         nodes[Node.ROOT] = root
 
-        for entry in scan_tree(self.base_dir):
-            entry: os.DirEntry
-
+        for entry in self.iter_directory_tree(self.base_dir):
             relative_path = entry.path[len(self.base_dir) :]
 
             if self.should_skip(entry, relative_path=relative_path):
@@ -112,3 +110,16 @@ class DiskScanner:
             return True
 
         return False
+
+    @classmethod
+    def iter_directory_tree(cls, path: str) -> Generator[os.DirEntry, None, None]:
+        """
+        Recursively yield DirEntry objects for given directory.
+        """
+        for entry in os.scandir(path):
+            entry: os.DirEntry
+
+            yield entry
+
+            if entry.is_dir(follow_symlinks=False):
+                yield from cls.iter_directory_tree(entry.path)  # see below for Python 2.x

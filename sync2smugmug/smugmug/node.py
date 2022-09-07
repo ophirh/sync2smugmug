@@ -264,7 +264,7 @@ class AlbumOnSmugmug(Album["FolderOnSmugmug", "AlbumOnSmugmug", "ImageOnSmugmug"
     async def get_images(self) -> List[ImageOnSmugmug]:
         if self._images is None:
             # Lazy load images
-            image_records = await self.connection.unpack_pagination(
+            image_records = await self.connection.paginate(
                 relative_uri=self.record["Uris"]["AlbumImages"]["Uri"],
                 object_name="AlbumImage",
             )
@@ -316,7 +316,7 @@ class AlbumOnSmugmug(Album["FolderOnSmugmug", "AlbumOnSmugmug", "ImageOnSmugmug"
                 smugmug_image and disk_image.compare(smugmug_image) > 0
             ):  # Only if disk is 'larger' than smugmug
                 # Image needs replacement
-                logger.info(f"Replacing image {disk_image} with {smugmug_image}")
+                logger.info(f"Uploading image {disk_image} (replacing {smugmug_image})")
 
                 if not dry_run:
                     # noinspection PyTypeChecker

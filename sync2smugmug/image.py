@@ -63,9 +63,12 @@ class Image:
         self._relative_path = relative_path
 
         _, ext = os.path.splitext(self._relative_path)
+        self._ext = ext.lower()
+
         self._image_name_converter: DefaultImageNameConverter = image_name_converters[
-            ext.lower()
+            self._ext
         ]
+
         self._smugmug_relative_path = (
             self._image_name_converter.to_smugmug_relative_path(self._relative_path)
         )
@@ -79,6 +82,10 @@ class Image:
         return self._relative_path
 
     @property
+    def extension(self):
+        return self._ext
+
+    @property
     def smugmug_relative_path(self) -> str:
         """
         Name (path) of an image the way it would be represented in Smugmug (after conversion)
@@ -86,17 +93,17 @@ class Image:
         return self._smugmug_relative_path
 
     @classmethod
-    def check_is_image(cls, path: str, f: str) -> bool:
-        _, ext = os.path.splitext(f)
+    def check_is_image(cls, disk_path: str) -> bool:
+        _, ext = os.path.splitext(disk_path)
         # Unknown file types: '.3gp',
         if ext.lower() not in image_name_converters:
             return False
 
-        return os.stat(os.path.join(path, f)).st_size > 0
+        return os.stat(disk_path).st_size > 0
 
     @property
     def is_image(self) -> bool:
-        return self.check_is_image(self.album.disk_path, self.name)
+        return self.check_is_image(os.path.join(self.album.disk_path, self.name))
 
     @classmethod
     def check_is_raw_image(cls, f: str) -> bool:

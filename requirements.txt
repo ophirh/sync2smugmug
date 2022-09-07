@@ -3,5 +3,6 @@ aioretry>=5.0.2
 ConfigArgParse>=1.5.3
 httpx>=0.23.0
 Pillow>=9.1.1
+pillow-heif>=0.5.1
 python-dateutil>=2.8.2
 rauth>=0.7.3

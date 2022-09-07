@@ -187,6 +187,8 @@ class SyncAlbumsAction(Action):
             self.smugmug_album.reload_images()  # Make sure album re-syncs
 
         if SyncTypeAction.DELETE_ONLINE_DUPLICATES in self.sync_action:
+            # TODO: Generalize as a Post-Processing step
+
             # Detect and remove duplicates in the Smugmug album (images with same name)
             await self.smugmug_album.remove_duplicates(dry_run=dry_run)
             self.smugmug_album.reload_images()  # Make sure album re-syncs

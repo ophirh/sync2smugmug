@@ -279,14 +279,14 @@ class SmugMugConnection:
 
         os.rename(temp_file_name, local_path)
 
-    async def unpack_pagination(
-        self, relative_uri: str, object_name: str
+    async def paginate(
+        self, relative_uri: str, object_name: str, page_size: int = 100,
     ) -> List[Dict]:
         """
         Materialized full list of items (through pagination)
         """
 
-        async def iter_items() -> Generator[Dict, None, None]:
+        async def aiter_items() -> Generator[Dict, None, None]:
             # Run the initial request
             response = await self.request_get(relative_uri)
 
@@ -301,12 +301,12 @@ class SmugMugConnection:
 
             while total_count > items_found:
                 response = await self.request_get(
-                    relative_uri, params={"start": items_found + 1, "count": 100}
+                    relative_uri, params={"start": items_found + 1, "count": page_size}
                 )
-                items = response.get(object_name)
-                if items:
-                    for item in items:
-                        yield item
-                        items_found += 1
 
-        return [a async for a in iter_items()]
+                items = response.get(object_name)
+                for item in items:
+                    yield item
+                    items_found += 1
+
+        return [a async for a in aiter_items()]

@@ -1,3 +1,4 @@
+from datetime import datetime, date
 import os
 import re
 from typing import Dict, List, TypeVar, Generic, Generator, Optional
@@ -9,7 +10,7 @@ FolderType = TypeVar("FolderType", covariant=True)
 AlbumType = TypeVar("AlbumType", covariant=True)
 ImageType = TypeVar("ImageType", covariant=True)
 
-DATE_ALBUM_PATTERN = re.compile(r"[12][90]\d\d_[0-1]\d_[0-3]\d - .*")
+DATE_ALBUM_PATTERN = re.compile(r"([12][90]\d\d_[0-1]\d_[0-3]\d)( - .*)?")
 
 
 class Node(Generic[FolderType, AlbumType, ImageType]):
@@ -67,9 +68,13 @@ class Node(Generic[FolderType, AlbumType, ImageType]):
     def is_folder(self) -> bool:
         return not self.is_album
 
-    @property
-    def is_date_album(self) -> bool:
-        return re.match(DATE_ALBUM_PATTERN, self.name) is not None
+    def get_album_date(self) -> Optional[date]:
+        match = re.match(DATE_ALBUM_PATTERN, self.name)
+        if match is None:
+            return None
+
+        date_str = match.group(1)
+        return datetime.strptime(date_str, "%Y_%m_%d").date()
 
     @property
     def last_modified(self) -> float:
@@ -165,16 +170,40 @@ class Folder(Node[FolderType, AlbumType, ImageType]):
     async def delete(self, dry_run: bool):
         raise NotImplementedError()
 
+    def iter_folders(self) -> Generator[FolderType, None, None]:
+        """
+        Recursively iterate through all folders (including root) - DFS
+        """
+        yield from self._iter_folders(self)
+
     def iter_albums(self) -> Generator[AlbumType, None, None]:
+        """
+        Recursively iterate through all albums - DFS
+        """
         yield from self._iter_albums(self)
 
-    @classmethod
-    def _iter_albums(cls, from_album: AlbumType) -> Generator[AlbumType, None, None]:
-        for a in from_album.albums.values():
-            yield a
+    async def aiter_images(self) -> Generator[ImageType, None, None]:
+        """
+        Recursively iterate through all images in all albums - DFS
+        """
+        for album in self._iter_albums(self):
+            for image in await album.get_images():
+                yield image
 
-        for sf in from_album.sub_folders.values():
-            yield from cls._iter_albums(sf)
+    @classmethod
+    def _iter_albums(cls, from_folder: FolderType) -> Generator[AlbumType, None, None]:
+        for folder in cls._iter_folders(from_folder):
+            for album in folder.albums.values():
+                yield album
+
+    @classmethod
+    def _iter_folders(cls, from_folder: FolderType) -> Generator[FolderType, None, None]:
+        # Yield first the root folder
+        yield from_folder
+
+        # Now recursively go through hierarchy under root
+        for sub_folder in from_folder.sub_folders.values():
+            yield from cls._iter_folders(sub_folder)
 
 
 class Album(Node[FolderType, AlbumType, ImageType]):

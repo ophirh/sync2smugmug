@@ -127,7 +127,7 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk", "ImageOnDisk"], OnDisk):
             [
                 e
                 for e in os.scandir(self.disk_path)
-                if ImageOnDisk.check_is_image(self.disk_path, e.name)
+                if ImageOnDisk.check_is_image(e.path)
             ]
         )
 
@@ -139,10 +139,10 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk", "ImageOnDisk"], OnDisk):
         return self._images
 
     def iter_images(self) -> Generator[ImageOnDisk, None, None]:
-        for f in os.listdir(self.disk_path):
-            if ImageOnDisk.check_is_image(self.disk_path, f):
+        for de in os.scandir(self.disk_path):
+            if ImageOnDisk.check_is_image(de.path):
                 yield ImageOnDisk(
-                    album=self, relative_path=os.path.join(self.relative_path, f)
+                    album=self, relative_path=os.path.join(self.relative_path, de.name)
                 )
 
     def reload_images(self):
@@ -172,7 +172,7 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk", "ImageOnDisk"], OnDisk):
         return any(
             True
             for f in os.listdir(disk_path)
-            if ImageOnDisk.check_is_image(disk_path, f)
+            if ImageOnDisk.check_is_image(os.path.join(disk_path, f))
         )
 
     def _load_sync_data(self) -> Dict:
