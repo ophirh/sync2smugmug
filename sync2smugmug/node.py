@@ -230,7 +230,7 @@ class Album(Node[FolderType, AlbumType, ImageType]):
     def image_count(self) -> int:
         raise NotImplementedError()
 
-    async def contains_image(self, image: ImageType) -> bool:
+    async def contains_image(self, image: Image) -> bool:
         assert isinstance(image, Image)
         return any(
             i for i in await self.get_images() if i.relative_path == image.relative_path
