@@ -116,10 +116,11 @@ class DiskScanner:
         """
         Recursively yield DirEntry objects for given directory.
         """
-        for entry in os.scandir(path):
-            entry: os.DirEntry
+        with os.scandir(path) as entries:
+            for entry in entries:
+                entry: os.DirEntry
 
-            yield entry
+                yield entry
 
-            if entry.is_dir(follow_symlinks=False):
-                yield from cls.iter_directory_tree(entry.path)  # see below for Python 2.x
+                if entry.is_dir(follow_symlinks=False):
+                    yield from cls.iter_directory_tree(entry.path)  # see below for Python 2.x

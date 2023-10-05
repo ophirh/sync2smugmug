@@ -8,7 +8,6 @@ from .actions import (
     RemoveFromSmugmugAction,
     UploadAction,
     SyncAlbumsAction,
-    UpdateAlbumSyncDataAction,
     AddAction,
     RemoveAction,
     RemoveOnlineDuplicatesAction,
@@ -182,17 +181,12 @@ async def sync_albums(
     assert from_album.relative_path == to_album.relative_path
 
     # Check if node changed (will check last update date, meta-data, etc...)
-    need_sync = False
     content_appears_the_same = False
 
-    if from_album.shallow_compare(to_album) != 0:
-        # Shallow compare shows equality
-        if await from_album.deep_compare(to_album, shallow_compare_first=False) == 0:
-            # Objects are really equal. Update sync data to make sure shallow_compare will show equality next time
-            need_sync, content_appears_the_same = False, True
-
-        else:
-            need_sync, content_appears_the_same = True, False
+    if await from_album.deep_compare(to_album) == 0:
+        content_appears_the_same = True
+    else:
+        content_appears_the_same = False
 
     # Figure out which of the nodes is on disk and which is on Smugmug (can go both ways)
     if isinstance(from_album, AlbumOnDisk):
@@ -203,7 +197,7 @@ async def sync_albums(
     assert isinstance(node_on_smugmug, AlbumOnSmugmug)
     assert isinstance(node_on_disk, AlbumOnDisk)
 
-    if need_sync:
+    if not content_appears_the_same:
         # Now add a sync actions to synchronize the albums
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"[<>] [{node_on_disk.source}] {node_on_disk.relative_path}")
@@ -214,30 +208,19 @@ async def sync_albums(
 
         await execute_action(action)
 
-    elif content_appears_the_same:
-        if SyncTypeAction.DELETE_ONLINE_DUPLICATES in sync_type:
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    f"[~~] {from_album.relative_path} - Checking for duplicates..."
-                )
-
-            action = RemoveOnlineDuplicatesAction(smugmug_album=node_on_smugmug)
-
-            await execute_action(action)
-
-        # Update the sync data since albums are the same - to prevent us from scanning it again
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"[~~] {from_album.relative_path} - Need to update sync data")
-
-        action = UpdateAlbumSyncDataAction(
-            disk_album=node_on_disk, smugmug_album=node_on_smugmug
-        )
-
-        await execute_action(action)
-
     else:
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"[==] {from_album.relative_path}")
+
+    if SyncTypeAction.DELETE_ONLINE_DUPLICATES in sync_type:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"[DD] {from_album.relative_path} - Checking for duplicates..."
+            )
+
+        action = RemoveOnlineDuplicatesAction(smugmug_album=node_on_smugmug)
+
+        await execute_action(action)
 
 
 async def generate_sync_actions(

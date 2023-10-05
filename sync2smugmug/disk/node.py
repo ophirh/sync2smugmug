@@ -2,6 +2,7 @@ import itertools
 import json
 import logging
 import os
+import typing
 from typing import List, Optional, Dict, Union, Generator
 
 from shutil import rmtree
@@ -9,6 +10,10 @@ from shutil import rmtree
 from ..config import config
 from ..disk.image import ImageOnDisk
 from ..node import Folder, Album
+
+if typing.TYPE_CHECKING:
+    # Import only for type checking
+    from ..smugmug.node import AlbumOnSmugmug, FolderOnSmugmug
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +29,8 @@ class OnDisk:
 
         if makedirs and not os.path.exists(self.disk_path):
             os.makedirs(self.disk_path)
-        else:
-            assert os.path.exists(self.disk_path) and os.path.isdir(self.disk_path)
+
+        assert os.path.exists(self.disk_path) and os.path.isdir(self.disk_path)
 
     async def delete(self, dry_run: bool):
         if not dry_run:
@@ -43,13 +48,10 @@ class FolderOnDisk(Folder["FolderOnDisk", "AlbumOnDisk", "ImageOnDisk"], OnDisk)
         Folder.__init__(self, "Disk", parent, relative_path)
         OnDisk.__init__(self, relative_path=self.relative_path, makedirs=makedirs)
 
-    @property
-    def last_modified(self) -> float:
-        return os.path.getmtime(self.disk_path)
-
     @classmethod
     def has_sub_folders(cls, disk_path: str) -> bool:
-        return any(entry.is_dir() for entry in os.scandir(disk_path))
+        with os.scandir(disk_path) as entries:
+            return any(entry.is_dir() for entry in entries)
 
     async def download(
         self,
@@ -57,7 +59,7 @@ class FolderOnDisk(Folder["FolderOnDisk", "AlbumOnDisk", "ImageOnDisk"], OnDisk)
         dry_run: bool,
     ) -> Union["AlbumOnDisk", "FolderOnDisk"]:
         """
-        Download to disk a smugmug node (folder / album) as a child to this object
+        Download to disk a Smugmug node (folder / album) as a child to this object
 
         :return: The node representing the uploaded entity
         """
@@ -123,27 +125,26 @@ class AlbumOnDisk(Album["FolderOnDisk", "AlbumOnDisk", "ImageOnDisk"], OnDisk):
 
     @property
     def image_count(self) -> int:
-        return len(
-            [
-                e
-                for e in os.scandir(self.disk_path)
-                if ImageOnDisk.check_is_image(e.path)
-            ]
-        )
+        return len(self._sync_get_images())
 
     async def get_images(self) -> List[ImageOnDisk]:
+        # Simply call the sync version
+        return self._sync_get_images()
+
+    def _sync_get_images(self) -> List[ImageOnDisk]:
         if self._images is None:
             # Lazy initialize images
-            self._images = [i for i in self.iter_images()]
+            self._images = list(self.iter_images())
 
         return self._images
 
     def iter_images(self) -> Generator[ImageOnDisk, None, None]:
-        for de in os.scandir(self.disk_path):
-            if ImageOnDisk.check_is_image(de.path):
-                yield ImageOnDisk(
-                    album=self, relative_path=os.path.join(self.relative_path, de.name)
-                )
+        with os.scandir(self.disk_path) as entries:
+            for de in entries:
+                if de.is_file() and ImageOnDisk.check_is_image(de.path):
+                    yield ImageOnDisk(
+                        album=self, relative_path=os.path.join(self.relative_path, de.name)
+                    )
 
     def reload_images(self):
         self._images = None  # Reload images on next call

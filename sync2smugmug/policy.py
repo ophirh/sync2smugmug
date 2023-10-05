@@ -27,7 +27,7 @@ class SyncType:
     def online_backup(cls) -> Tuple[SyncTypeAction, ...]:
         return (
             SyncTypeAction.UPLOAD,
-            SyncTypeAction.PRE_PROCESS_DISK,
+            # SyncTypeAction.PRE_PROCESS_DISK,
         )
 
     @classmethod

@@ -197,25 +197,6 @@ class SyncAlbumsAction(Action):
             self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)
 
 
-class UpdateAlbumSyncDataAction(Action):
-    def __init__(
-        self, disk_album: Union[AlbumOnDisk], smugmug_album: Union[AlbumOnSmugmug]
-    ):
-        """
-        Update the album's sync data (no real changes were detected)
-        """
-        super().__init__()
-
-        self.disk_album: AlbumOnDisk = disk_album
-        self.smugmug_album: AlbumOnSmugmug = smugmug_album
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__} (for {self.disk_album})"
-
-    async def perform(self, dry_run: bool):
-        self.disk_album.update_sync_date(sync_date=self.smugmug_album.last_modified)
-
-
 class RemoveOnlineDuplicatesAction(Action):
     def __init__(self, smugmug_album: Union[AlbumOnSmugmug]):
         """

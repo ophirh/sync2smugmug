@@ -76,13 +76,6 @@ class Node(Generic[FolderType, AlbumType, ImageType]):
         date_str = match.group(1)
         return datetime.strptime(date_str, "%Y_%m_%d").date()
 
-    @property
-    def last_modified(self) -> float:
-        """
-        Get last modified time in Unix timestamp
-        """
-        raise NotImplementedError()
-
     async def delete(self, dry_run: bool):
         raise NotImplementedError()
 
@@ -108,10 +101,6 @@ class Folder(Node[FolderType, AlbumType, ImageType]):
     @property
     def albums(self) -> Dict[str, AlbumType]:
         return self._albums
-
-    @property
-    def last_modified(self) -> float:
-        raise NotImplementedError()
 
     @property
     def is_album(self) -> bool:
@@ -236,41 +225,21 @@ class Album(Node[FolderType, AlbumType, ImageType]):
             i for i in await self.get_images() if i.relative_path == image.relative_path
         )
 
-    def compare(self, other: AlbumType) -> int:
-        """
-        Same functionality as old __cmp__ or C's strcmp
-        """
-        assert isinstance(other, Album)
-
-        i = self.shallow_compare(other)
-        if i == 0:
-            i = self.deep_compare(other, shallow_compare_first=False)
-
-        return i
-
-    def shallow_compare(self, other: AlbumType) -> int:
+    async def deep_compare(
+        self, other: AlbumType, stop_at_shallow: bool = True
+    ) -> int:
         i = cmp(self.relative_path, other.relative_path)
         if i != 0:
             return i
-
-        i = self.last_modified - other.last_modified
-        if i != 0:
-            return 1 if i > 0 else -1
 
         i = self.image_count - other.image_count
         if i != 0:
             return i
 
-        # TODO: Check change in description and other meta-data attributes
-        return 0
-
-    async def deep_compare(
-        self, other: AlbumType, shallow_compare_first: bool = True
-    ) -> int:
-        if shallow_compare_first:
-            i = self.shallow_compare(other)
-            if i != 0:
-                return i
+        i = self.last_modified - other.last_modified
+        if i == 0 and stop_at_shallow:
+            # Stop at shallow...
+            return 0
 
         # Compare images - one by one
         self_images = sorted(await self.get_images(), key=lambda k: k.relative_path)

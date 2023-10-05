@@ -16,7 +16,7 @@ class Config:
             self.base_dir
         ), f"Base dir {self.base_dir} does not exist!"
 
-        if self.iphone_photos_location:
+        if self._args.iphone_photos_location:
             assert os.path.exists(
                 self.iphone_photos_location
             ), f"iPhone photos dir {self.iphone_photos_location} does not exist!"

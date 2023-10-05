@@ -84,14 +84,6 @@ class FolderOnSmugmug(Folder["FolderOnSmugmug", "AlbumOnSmugmug", "ImageOnSmugmu
     def albums(self) -> Dict[str, "AlbumOnSmugmug"]:
         return self._albums
 
-    @property
-    def last_modified(self) -> float:
-        """
-        Get last modified time in Unix timestamp
-        """
-        folder_modified = self.record["DateModified"]  # u'2014-03-01T22:12:13+00:00'
-        return dp.parse(folder_modified).timestamp()
-
     async def upload(
         self, from_disk_node: Union[FolderOnDisk, AlbumOnDisk], dry_run: bool
     ) -> Union["FolderOnSmugmug", "AlbumOnSmugmug"]:

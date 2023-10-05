@@ -32,58 +32,59 @@ class ImportIPhoneImages(Processor):
             albums_by_date = {a.get_album_date(): a for a in on_disk.iter_albums()}
             folders_by_name = {f.name: f for f in on_disk.iter_folders()}
 
-            for entry in os.scandir(config.iphone_photos_location):
-                entry: os.DirEntry
+            with os.scandir(config.iphone_photos_location) as entries:
+                for entry in entries:
+                    entry: os.DirEntry
 
-                if not ImageOnDisk.check_is_image(entry.path):
-                    continue
-
-                time_taken = ImageOnDisk.extract_time_taken(entry.path)
-                if time_taken is None:
-                    # Skip this one - as we can't identify the time it was taken
-                    logger.warning(f"Skipping {entry.path} - could not identify time")
-                    continue
-
-                date_taken = time_taken.date()
-                dest_album: AlbumOnDisk = albums_by_date.get(date_taken)
-
-                if dest_album is None:
-                    # An album needs to be created!
-
-                    # Find the parent node!
-                    parent_node = folders_by_name.get(str(date_taken.year))
-                    assert parent_node is not None
-
-                    # Create a new album
-                    dest_album = AlbumOnDisk(
-                        parent=parent_node,
-                        relative_path=os.path.join(
-                            parent_node.relative_path, date_taken.strftime("%Y_%m_%d")
-                        ),
-                        makedirs=True,
-                    )
-
-                else:
-                    # The album already exists (at least the date does)
-                    logger.debug(
-                        f"Found album ({dest_album.name}) for date {date_taken}"
-                    )
-
-                    # Check if the image exists - if so, we can skip it!
-                    if os.path.exists(os.path.join(dest_album.disk_path, entry.name)):
-                        logger.warning(
-                            f"Image ({entry.name}) already exists in album {dest_album.relative_path}. Deleting!"
-                        )
-                        os.remove(entry.path)
+                    if not entry.is_file() or not ImageOnDisk.check_is_image(entry.path):
                         continue
 
-                # Move the image to the destination album!
-                os.replace(entry.path, os.path.join(dest_album.disk_path, entry.name))
-                logger.info(
-                    f"Imported iphone photo {entry.name} into album ({dest_album.relative_path})"
-                )
+                    time_taken = ImageOnDisk.extract_time_taken(entry.path)
+                    if time_taken is None:
+                        # Skip this one - as we can't identify the time it was taken
+                        logger.warning(f"Skipping {entry.path} - could not identify time")
+                        continue
 
-                changed = True
+                    date_taken = time_taken.date()
+                    dest_album: AlbumOnDisk = albums_by_date.get(date_taken)
+
+                    if dest_album is None:
+                        # An album needs to be created!
+
+                        # Find the parent node!
+                        parent_node = folders_by_name.get(str(date_taken.year))
+                        assert parent_node is not None
+
+                        # Create a new album
+                        dest_album = AlbumOnDisk(
+                            parent=parent_node,
+                            relative_path=os.path.join(
+                                parent_node.relative_path, date_taken.strftime("%Y_%m_%d")
+                            ),
+                            makedirs=True,
+                        )
+
+                    else:
+                        # The album already exists (at least the date does)
+                        logger.debug(
+                            f"Found album ({dest_album.name}) for date {date_taken}"
+                        )
+
+                        # Check if the image exists - if so, we can skip it!
+                        if os.path.exists(os.path.join(dest_album.disk_path, entry.name)):
+                            logger.warning(
+                                f"Image ({entry.name}) already exists in album {dest_album.relative_path}. Deleting!"
+                            )
+                            os.remove(entry.path)
+                            continue
+
+                    # Move the image to the destination album!
+                    os.replace(entry.path, os.path.join(dest_album.disk_path, entry.name))
+                    logger.info(
+                        f"Imported iphone photo {entry.name} into album ({dest_album.relative_path})"
+                    )
+
+                    changed = True
 
         if not changed:
             logger.info("No iPhone images imported")
