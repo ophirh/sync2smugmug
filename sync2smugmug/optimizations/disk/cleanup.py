@@ -34,11 +34,3 @@ class DeleteEmptyDirectories(DiskOptimization):
                 requires_reload |= self._scan(dir_path=p, dry_run=dry_run)
 
         return requires_reload
-
-    @staticmethod
-    def _delete_dir(dir_path: Path, dry_run: bool):
-        logger.warning(f"Deleting empty dir {dir_path}")
-
-        if not dry_run:
-            # TODO
-            pass
