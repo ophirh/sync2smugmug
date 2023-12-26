@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Generator, List, Iterable
 
-from sync2smugmug import protocols, models, configuration
+from sync2smugmug import protocols, models, configuration, disk
 from sync2smugmug.online import smugmug
 
 logger = logging.getLogger(__name__)
@@ -193,7 +193,7 @@ class OnlineConnection:
 
 
 @asynccontextmanager
-async def open_smugmug_connection(
+async def connect(
         connection_params: configuration.ConnectionParams
 ) -> Generator[OnlineConnection, None, None]:
     """ Context manager for creating a smugmug connection """
@@ -209,7 +209,10 @@ async def open_smugmug_connection(
     await core_connection.disconnect()
 
 
-async def load_album_images(album: models.Album, connection: OnlineConnection):
+async def load_album_images(
+        album: models.Album,
+        connection: OnlineConnection
+):
     """
     Loads images into the album
     """
@@ -230,3 +233,68 @@ async def load_album_images(album: models.Album, connection: OnlineConnection):
 
     # Replace the album's images in one shot
     album.images = images
+
+
+async def download_missing_images(
+        from_online_album: models.Album,
+        to_disk_album: models.Album,
+        connection: OnlineConnection,
+        dry_run: bool
+) -> bool:
+    # Figure out which images to download
+    missing_images: List[models.Image] = []
+
+    if from_online_album.requires_image_load:
+        await load_album_images(album=from_online_album, connection=connection)
+
+    if to_disk_album.requires_image_load:
+        disk.load_album_images(album=to_disk_album)
+
+    disk_images_by_relative_path = {i.relative_path for i in to_disk_album.images}
+    for online_image in from_online_album.images:
+        if online_image.relative_path not in disk_images_by_relative_path:
+            missing_images.append(online_image)
+
+    if not missing_images:
+        return False
+
+    await connection.download_images(
+        images=(i.online_info for i in missing_images),
+        to_folder=to_disk_album.disk_info.disk_path,
+        dry_run=dry_run
+    )
+
+    # Reload all images into disk album (to make sure it reflects the new situation on disk)
+    disk.load_album_images(album=to_disk_album)
+
+    logger.info(f"Finished downloading {len(missing_images)} images from {from_online_album}")
+    return True
+
+
+async def upload_missing_images(
+        from_disk_album: models.Album,
+        to_online_album: models.Album,
+        connection: OnlineConnection,
+        dry_run: bool
+) -> bool:
+    # Figure out which images to upload
+    images_to_upload: List[pathlib.Path] = []
+
+    online_images_by_relative_path = {i.relative_path for i in (to_online_album.images or [])}
+    for disk_image in from_disk_album.images:
+        if disk_image.relative_path not in online_images_by_relative_path:
+            images_to_upload.append(disk_image.disk_info.disk_path)
+
+    if not images_to_upload:
+        return False
+
+    await connection.upload_images(
+        image_paths=images_to_upload,
+        to_album_uri=to_online_album.online_info.uri,
+        dry_run=dry_run
+    )
+
+    await load_album_images(album=to_online_album, connection=connection)
+
+    logger.info(f"Finished uploading {len(images_to_upload)} images from {from_disk_album}")
+    return True

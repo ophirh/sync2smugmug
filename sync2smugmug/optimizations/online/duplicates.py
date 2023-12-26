@@ -1,8 +1,7 @@
 import logging
 from typing import List, Set
 
-import sync2smugmug.protocols
-from sync2smugmug import models
+from sync2smugmug import models, protocols
 from sync2smugmug.online import online
 from sync2smugmug.optimizations.online import OnlineOptimization
 from sync2smugmug.utils import general_tools, node_tools
@@ -32,7 +31,7 @@ class RemoveOnlineImageDuplicates(OnlineOptimization):
 
         # Go over all albums and for each, check if there are duplicates
         for online_album in node_tools.iter_albums(root_folder=on_line):
-            images: List[sync2smugmug.protocols.OnlineImageInfoShape] = []
+            images: List[protocols.OnlineImageInfoShape] = []
 
             if count < self.last_album_name_checked:
                 # Already scanned this album

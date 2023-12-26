@@ -22,7 +22,7 @@ def retry_policy(info: aioretry.RetryInfo) -> aioretry.RetryPolicyStrategy:
     """
     Retry policy for connection issues
     """
-    if isinstance(info.exception, (httpx.TransportError, requests.HTTPError)):
+    if isinstance(info.exception, (httpx.TransportError, requests.ConnectionError)):
         if info.fails < 3:
             logger.warning(f"Connection failed ({info.exception})! retrying...")
             return False, info.fails * 1.0
@@ -169,7 +169,6 @@ class SmugmugCoreConnection:
             async for chunk in r.aiter_raw(chunk_size=1024 * 1024):
                 yield chunk
 
-    @aioretry.retry(retry_policy)
     async def request_upload(
             self,
             album_uri: str,

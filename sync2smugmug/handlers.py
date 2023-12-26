@@ -1,7 +1,5 @@
 import logging
-import pathlib
 import shutil
-from typing import List
 
 from sync2smugmug import models, events, disk, event_manager
 from sync2smugmug.online import online
@@ -174,7 +172,7 @@ async def upload_album(event_data: events.AlbumEventData, dry_run: bool) -> bool
     event_data.target_parent.albums[album.name] = album
 
     # Upload the images for this source_album
-    any_change = await upload_missing_images(
+    any_change = await online.upload_missing_images(
         from_disk_album=disk_album,
         to_online_album=album,
         connection=event_data.connection,
@@ -202,7 +200,7 @@ async def download_album(event_data: events.AlbumEventData, dry_run: bool) -> bo
     disk_album = models.Album(relative_path=online_album.relative_path, disk_info=disk_info)
     disk_parent_folder.albums[disk_album.name] = disk_album
 
-    changed = await download_missing_images(
+    changed = await online.download_missing_images(
         from_online_album=online_album,
         to_disk_album=disk_album,
         connection=event_data.connection,
@@ -228,7 +226,7 @@ async def sync_albums(event_data: events.SyncAlbumImagesEventData, dry_run: bool
         disk.load_album_images(album=event_data.disk_album)
 
     if event_data.sync_action.download:
-        changed |= await download_missing_images(
+        changed |= await online.download_missing_images(
             from_online_album=event_data.online_album,
             to_disk_album=event_data.disk_album,
             connection=event_data.connection,
@@ -236,7 +234,7 @@ async def sync_albums(event_data: events.SyncAlbumImagesEventData, dry_run: bool
         )
 
     if event_data.sync_action.upload:
-        changed |= await upload_missing_images(
+        changed |= await online.upload_missing_images(
             from_disk_album=event_data.disk_album,
             to_online_album=event_data.online_album,
             connection=event_data.connection,
@@ -265,68 +263,3 @@ async def sync_albums(event_data: events.SyncAlbumImagesEventData, dry_run: bool
             event_data.disk_album.disk_info.remember_sync(event_data.online_album.online_info.last_updated)
 
     return changed
-
-
-async def download_missing_images(
-        from_online_album: models.Album,
-        to_disk_album: models.Album,
-        connection: online.OnlineConnection,
-        dry_run: bool
-) -> bool:
-    # Figure out which images to download
-    missing_images: List[models.Image] = []
-
-    if from_online_album.requires_image_load:
-        await online.load_album_images(album=from_online_album, connection=connection)
-
-    if to_disk_album.requires_image_load:
-        disk.load_album_images(album=to_disk_album)
-
-    disk_images_by_relative_path = {i.relative_path for i in to_disk_album.images}
-    for online_image in from_online_album.images:
-        if online_image.relative_path not in disk_images_by_relative_path:
-            missing_images.append(online_image)
-
-    if not missing_images:
-        return False
-
-    await connection.download_images(
-        images=(i.online_info for i in missing_images),
-        to_folder=to_disk_album.disk_info.disk_path,
-        dry_run=dry_run
-    )
-
-    # Reload all images into disk album (to make sure it reflects the new situation on disk)
-    disk.load_album_images(album=to_disk_album)
-
-    logger.info(f"Finished downloading {len(missing_images)} images from {from_online_album}")
-    return True
-
-
-async def upload_missing_images(
-        from_disk_album: models.Album,
-        to_online_album: models.Album,
-        connection: online.OnlineConnection,
-        dry_run: bool
-) -> bool:
-    # Figure out which images to upload
-    images_to_upload: List[pathlib.Path] = []
-
-    online_images_by_relative_path = {i.relative_path for i in (to_online_album.images or [])}
-    for disk_image in from_disk_album.images:
-        if disk_image.relative_path not in online_images_by_relative_path:
-            images_to_upload.append(disk_image.disk_info.disk_path)
-
-    if not images_to_upload:
-        return False
-
-    await connection.upload_images(
-        image_paths=images_to_upload,
-        to_album_uri=to_online_album.online_info.uri,
-        dry_run=dry_run
-    )
-
-    await online.load_album_images(album=to_online_album, connection=connection)
-
-    logger.info(f"Finished uploading {len(images_to_upload)} images from {from_disk_album}")
-    return True

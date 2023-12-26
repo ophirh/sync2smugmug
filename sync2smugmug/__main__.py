@@ -22,7 +22,7 @@ async def main():
     if sync_action.optimize_on_disk:
         await disk_optimizations.run_disk_optimizations(dry_run=config.dry_run)
 
-    async with online.open_smugmug_connection(config.connection_params) as connection:
+    async with online.connect(config.connection_params) as connection:
         if sync_action.optimize_online:
             await online_optimizations.run_online_optimizations(connection=connection, dry_run=config.dry_run)
 
