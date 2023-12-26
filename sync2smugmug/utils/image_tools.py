@@ -23,16 +23,16 @@ def images_are_the_same(image1: models.Image, image2: models.Image) -> bool:
 
 
 @lru_cache(maxsize=128)
-def extract_metadata(image_on_disk: models.Image) -> Dict[str, Any]:
+def extract_metadata(disk_path: Path, image_type: models.ImageType) -> Dict[str, Any]:
     """
     Convert Image EXIF data into a dictionary
     """
     metadata = {}
 
-    if not image_on_disk.image_type.is_movie:
+    if not image_type.is_movie:
         try:
             # Extract vendor, model from metadata
-            with closing(PIL.Image.open(image_on_disk.disk_info.disk_path)) as pil_image:
+            with closing(PIL.Image.open(disk_path)) as pil_image:
                 exif_data = pil_image.getexif()
 
                 for tag_id in exif_data:
@@ -56,8 +56,8 @@ def extract_metadata(image_on_disk: models.Image) -> Dict[str, Any]:
     return metadata
 
 
-def extract_image_time_taken(image_on_disk: models.Image) -> datetime | None:
-    metadata = extract_metadata(image_on_disk)
+def extract_image_time_taken(disk_path: Path, image_type: models.ImageType) -> datetime | None:
+    metadata = extract_metadata(disk_path, image_type)
     if metadata is None:
         return None
 
@@ -69,20 +69,20 @@ def extract_image_time_taken(image_on_disk: models.Image) -> datetime | None:
         # Parse the date!
         return datetime.strptime(datetime_str, "%Y:%m:%d %H:%M:%S")
     except ValueError:
-        logger.exception(f"Failed to parse date for {image_on_disk}")
+        logger.exception(f"Failed to parse date for {disk_path}")
         return None
 
 
-def extract_image_camera_make(image_on_disk: models.Image) -> str | None:
-    metadata = extract_metadata(image_on_disk)
+def extract_image_camera_make(disk_path: Path, image_type: models.ImageType) -> str | None:
+    metadata = extract_metadata(disk_path, image_type)
     if metadata is None:
         return None
 
     return metadata.get("Make")
 
 
-def extract_image_camera_model(image_on_disk) -> str | None:
-    metadata = extract_metadata(image_on_disk)
+def extract_image_camera_model(disk_path: Path, image_type: models.ImageType) -> str | None:
+    metadata = extract_metadata(disk_path, image_type)
     if metadata is None:
         return None
 

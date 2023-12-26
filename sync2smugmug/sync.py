@@ -132,7 +132,8 @@ async def synchronize_folders(
             # If delete is required, delete all children of 'target_folder' that do not exist in 'source_folder'
 
             # Make a local copy of the source_album list (so we don't modify during iteration)
-            for sub_folder_name, sub_folder in dict(target_folder.sub_folders).items():
+            target_sub_folders = dict(target_folder.sub_folders)
+            for sub_folder_name, sub_folder in target_sub_folders.items():
                 if sub_folder_name not in source_folder.sub_folders:
                     await handle_delete(
                         event=event_group.FOLDER_DELETE,
@@ -144,7 +145,8 @@ async def synchronize_folders(
                     )
 
             # Make a local copy of the source_album list (so we don't modify during iteration)
-            for album_name, album in dict(target_folder.albums).items():
+            target_albums = dict(target_folder.albums)
+            for album_name, album in target_albums.items():
                 if album_name not in source_folder.albums:
                     await handle_delete(
                         event=event_group.ALBUM_DELETE,

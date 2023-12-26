@@ -20,7 +20,11 @@ class DeleteEmptyDirectories(DiskOptimization):
 
     def _scan(self, dir_path: Path, dry_run: bool) -> bool:
         if node_tools.dir_is_empty(dir_path):
-            self._delete_dir(dir_path=dir_path, dry_run=dry_run)
+            logger.warning(f"Deleting empty dir {dir_path}")
+
+            if not dry_run:
+                dir_path.rmdir()
+
             return True
 
         requires_reload = False

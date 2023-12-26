@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 async def run_disk_optimizations(dry_run: bool):
     # List all the optimizations currently available (order matters)
     optimizations: Iterable[DiskOptimization] = (
-        iphone.ImportIPhoneImages(config.base_dir),
+        # iphone.ImportIPhoneImages(config.base_dir),
         conversion.ConvertImagesAndMovies(config.base_dir),
         duplicates.DeleteImageDuplicates(config.base_dir),
         duplicates.DeleteAlbumDuplicates(config.base_dir),

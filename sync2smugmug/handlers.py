@@ -125,6 +125,9 @@ async def delete_folder_on_disk(event_data: events.DeleteFolderEventData, dry_ru
 
     # Update the data model
     del event_data.parent.sub_folders[event_data.target.name]
+
+    logger.info(f"Deleted {event_data.target} (dry_run={dry_run})")
+
     return True
 
 
@@ -135,6 +138,9 @@ async def delete_album_on_disk(event_data: events.DeleteAlbumEventData, dry_run:
 
     # Update the data model
     del event_data.parent.albums[event_data.target.name]
+
+    logger.info(f"Deleted {event_data.target} (dry_run={dry_run})")
+
     return True
 
 
@@ -143,6 +149,8 @@ async def delete_folder_online(event_data: events.DeleteFolderEventData, dry_run
     changed = await event_data.connection.delete(uri=event_data.target.online_info.uri, dry_run=dry_run)
     del event_data.parent.sub_folders[event_data.target.name]
 
+    logger.info(f"Deleted {event_data.target} (dry_run={dry_run})")
+
     return changed
 
 
@@ -150,6 +158,8 @@ async def delete_folder_online(event_data: events.DeleteFolderEventData, dry_run
 async def delete_album_online(event_data: events.DeleteAlbumEventData, dry_run: bool) -> bool:
     changed = await event_data.connection.delete(uri=event_data.target.online_info.uri, dry_run=dry_run)
     del event_data.parent.albums[event_data.target.name]
+
+    logger.info(f"Deleted {event_data.target} (dry_run={dry_run})")
 
     return changed
 
