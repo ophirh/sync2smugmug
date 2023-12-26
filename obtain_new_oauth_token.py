@@ -5,8 +5,8 @@ from urllib.parse import urlencode, urlunsplit, parse_qsl, urlsplit
 
 from rauth import OAuth1Session, OAuth1Service
 
-from sync2smugmug.config import config
-from sync2smugmug.smugmug.connection import SmugMugConnection
+from sync2smugmug.configuration import config
+from sync2smugmug.online.smugmug import SmugmugCoreConnection
 
 OAUTH_ORIGIN = "https://secure.smugmug.com"
 REQUEST_TOKEN_URL = OAUTH_ORIGIN + "/services/oauth/1.0a/getRequestToken"
@@ -17,12 +17,12 @@ AUTHORIZE_URL = OAUTH_ORIGIN + "/services/oauth/1.0a/authorize"
 def get_service() -> OAuth1Service:
     service = OAuth1Service(
         name="sync2smugmug",
-        consumer_key=config.consumer_key,
-        consumer_secret=config.consumer_secret,
+        consumer_key=config.connection_params.consumer_key,
+        consumer_secret=config.connection_params.consumer_secret,
         request_token_url=REQUEST_TOKEN_URL,
         access_token_url=ACCESS_TOKEN_URL,
         authorize_url=AUTHORIZE_URL,
-        base_url=SmugMugConnection.API_BASE_URL,
+        base_url=SmugmugCoreConnection.API_BASE_URL,
     )
     return service
 
@@ -87,7 +87,7 @@ def main():
     )
 
     auth_user: str = session.get(
-        f"{SmugMugConnection.API_BASE_URL}!authuser",
+        url=f"{SmugmugCoreConnection.API_BASE_URL}!authuser",
         headers={"Accept": "application/json"},
     ).text
 

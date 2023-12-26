@@ -1,55 +1,52 @@
-from enum import Enum
-from typing import Tuple
+import dataclasses
+from typing import List
 
 
-class SyncTypeAction(Enum):
-    DOWNLOAD = "DOWNLOAD"
-    UPLOAD = "UPLOAD"
-    DELETE_ON_DISK = "DELETE_ON_DISK"
-    DELETE_ON_CLOUD = "DELETE_ON_CLOUD"
-    DELETE_ONLINE_DUPLICATES = "DELETE_ONLINE_DUPLICATES"
-    PRE_PROCESS_DISK = "PRE_PROCESS_DISK"
+@dataclasses.dataclass(frozen=True)
+class SyncAction:
+    """ Represents what the sync policy is guiding the synchronization to do"""
+    download: bool = False
+    upload: bool = False
+    delete_on_disk: bool = False
+    delete_online: bool = False
+    optimize_on_disk: bool = False
+    optimize_online: bool = False
 
 
-class SyncType:
+class SyncActionPresets:
     @classmethod
-    def local_backup(cls) -> Tuple[SyncTypeAction, ...]:
-        return (SyncTypeAction.DOWNLOAD,)
-
-    @classmethod
-    def local_backup_clean(cls) -> Tuple[SyncTypeAction, ...]:
-        return (
-            *cls.local_backup(),
-            SyncTypeAction.DELETE_ON_DISK,
-        )
+    def local_backup(cls) -> SyncAction:
+        return SyncAction(download=True)
 
     @classmethod
-    def online_backup(cls) -> Tuple[SyncTypeAction, ...]:
-        return (
-            SyncTypeAction.UPLOAD,
-            # SyncTypeAction.PRE_PROCESS_DISK,
-        )
+    def local_backup_clean(cls) -> SyncAction:
+        return dataclasses.replace(cls.local_backup(), delete_on_disk=True)
 
     @classmethod
-    def online_backup_clean(cls) -> Tuple[SyncTypeAction, ...]:
-        return (
-            *cls.online_backup(),
-            SyncTypeAction.DELETE_ONLINE_DUPLICATES,
-        )
+    def online_backup(cls) -> SyncAction:
+        return SyncAction(upload=True)  # optimize_on_disk=True
 
     @classmethod
-    def two_way_sync_no_deletes(cls) -> Tuple[SyncTypeAction, ...]:
-        """
-        Sync both disk and Smugmug - to make sure both systems have the same images (only additive, no deletions)
-        """
-        return (
-            SyncTypeAction.UPLOAD,
-            SyncTypeAction.DOWNLOAD,
-        )
+    def online_backup_clean(cls) -> SyncAction:
+        return dataclasses.replace(cls.online_backup(), delete_online=True)
 
     @classmethod
-    def test(cls) -> Tuple[SyncTypeAction, ...]:
+    def test(cls) -> SyncAction:
         """
         For testing...
         """
-        return (SyncTypeAction.PRE_PROCESS_DISK,)
+        return SyncAction(optimize_on_disk=True, optimize_online=True)
+
+    @classmethod
+    def get_presets(cls) -> List[str]:
+        """
+        Return a list of available presets
+        """
+        static_methods = []
+
+        for k, v in cls.__dict__.items():
+            # All methods (excluding this one) are considered presets
+            if isinstance(v, classmethod) and k != cls.get_presets.__name__:
+                static_methods.append(k)
+
+        return sorted(static_methods)

@@ -5,19 +5,16 @@ import time
 logger = logging.getLogger(__name__)
 
 
-def cmp(a, b):
-    return (a > b) - (a < b)
-
-
 def timeit(func):
     """
     Timeit function that works for both regular functions and async coroutines
     """
-    async def process(func, *args, **params):
+
+    async def process(f, *args, **params):
         if asyncio.iscoroutinefunction(func):
-            return await func(*args, **params)
+            return await f(*args, **params)
         else:
-            return func(*args, **params)
+            return f(*args, **params)
 
     async def helper(*args, **params):
         start = time.time()

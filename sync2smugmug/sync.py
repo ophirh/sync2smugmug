@@ -1,306 +1,348 @@
 import logging
-from typing import Tuple, Callable, List, Type, Optional, Awaitable
+from typing import Type
 
-from .actions import (
-    Action,
-    DownloadAction,
-    RemoveFromDiskAction,
-    RemoveFromSmugmugAction,
-    UploadAction,
-    SyncAlbumsAction,
-    AddAction,
-    RemoveAction,
-    RemoveOnlineDuplicatesAction,
-)
-from .config import config
-from .disk.scanner import FolderOnDisk, AlbumOnDisk
-from .node import Album, Folder
-from .policy import SyncTypeAction
-from .smugmug.scanner import FolderOnSmugmug, AlbumOnSmugmug
+from sync2smugmug import models, policy, events, event_manager, disk
+from sync2smugmug.online import online
+from sync2smugmug.utils import image_tools
 
 logger = logging.getLogger(__name__)
 
-
-async def sync(
-    on_disk: FolderOnDisk,
-    on_smugmug: FolderOnSmugmug,
-    sync_type: Tuple[SyncTypeAction, ...],
-) -> List[Action]:
-    """
-    Given scan results, generates a set of actions required to sync between the disk and smugmug
-
-    :param on_disk: Root for on disk scans
-    :param on_smugmug: Root for on smugmug scans
-    :param sync_type: Actions to perform
-    """
-
-    actions: List[Action] = []
-
-    async def execute_action(action: Action):
-        """
-        Execute the action and keep track of them
-        """
-        await action.perform(config.dry_run)
-        actions.append(action)
-
-    await generate_sync_actions(
-        on_disk=on_disk,
-        on_smugmug=on_smugmug,
-        execute_action=execute_action,
-        sync_type=sync_type,
-    )
-
-    return actions
+DELTA = 60.0  # 60 seconds to allow between online and disk clocks
 
 
-# noinspection DuplicatedCode
-async def recurse_sync_folders(
-    from_folder: Folder,
-    to_folder: Folder,
-    to_folder_parent: Optional[Folder],
-    add_action_class: Type[AddAction],
-    remove_action_class: Type[RemoveAction],
-    should_delete: bool,
-    execute_action: Callable[[Action], Awaitable[None]],
-    sync_type: Tuple[SyncTypeAction, ...],
-):
-    assert from_folder is not None, "from_folder must always be there!"
-
-    if not from_folder.is_root and from_folder.parent.is_root:
-        # Show progress on top folders (years)
-        logger.info(f"Synchronizing {from_folder.relative_path}")
-
-    # Case #1 - to_folder is missing - we need to add it whole
-    if to_folder is None:
-        assert to_folder_parent is not None
-
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"[+{from_folder.source[0]}] {from_folder.relative_path}")
-
-        action = add_action_class(
-            what_to_add=from_folder,
-            parent_to_add_to=to_folder_parent,
-            message="entire folder",
-        )
-
-        await execute_action(action)
-
-        return
-
-    # Case #2 - Both folders exist (and have same relative path) - Recursively apply to sub-folders of from_folder.
-    assert from_folder.relative_path == to_folder.relative_path
-
-    for name, from_sub_folder in sorted(
-        from_folder.sub_folders.items(), key=lambda x: x[0]
-    ):
-        to_sub_folder = to_folder.sub_folders.get(name)
-
-        # Intentionally limit concurrency here...
-        await recurse_sync_folders(
-            from_folder=from_sub_folder,
-            to_folder=to_sub_folder,
-            to_folder_parent=to_folder,
-            add_action_class=add_action_class,
-            remove_action_class=remove_action_class,
-            should_delete=should_delete,
-            execute_action=execute_action,
-            sync_type=sync_type,
-        )
-
-    # Now go over albums in the same way
-    for name, from_album in sorted(from_folder.albums.items(), key=lambda x: x[0]):
-        if from_album.image_count == 0:
-            continue
-
-        to_album = to_folder.albums.get(name)
-
-        # Intentionally limit concurrency here...
-        await sync_albums(
-            from_album=from_album,
-            to_album=to_album,
-            to_folder_parent=to_folder,
-            add_action_class=add_action_class,
-            execute_action=execute_action,
-            sync_type=sync_type,
-        )
-
-    if should_delete:
-        # If delete is required, delete all children of 'to_folder' that do not exist in 'from_folder'
-
-        # Make a local copy of the album list (so we don't modify during iteration)
-        local_copy_of_sub_folders = dict(to_folder.sub_folders)
-
-        for name, to_sub_folder in local_copy_of_sub_folders.items():
-            if name not in from_folder.sub_folders:
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(
-                        f"[-{to_sub_folder.source[0]}] {to_sub_folder.relative_path}"
-                    )
-
-                # Intentionally limit concurrency here...
-                await execute_action(remove_action_class(what_to_remove=to_sub_folder))
-
-        # Make a local copy of the album list (so we don't modify during iteration)
-        local_copy_of_albums = dict(to_folder.albums)
-
-        for name, to_album in local_copy_of_albums.items():
-            if name not in from_folder.albums:
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(f"[-{to_album.source[0]}] {to_album.relative_path}")
-
-                # Intentionally limit concurrency here...
-                await execute_action(remove_action_class(what_to_remove=to_album))
-
-
-async def sync_albums(
-    from_album: Album,
-    to_album: Album,
-    to_folder_parent: Folder,
-    add_action_class: Type[AddAction],
-    execute_action: Callable[[Action], Awaitable[None]],
-    sync_type: Tuple[SyncTypeAction, ...],
+async def synchronize(
+        on_disk: models.RootFolder,
+        on_line: models.RootFolder,
+        sync_action: policy.SyncAction,
+        connection: online.OnlineConnection,
+        dry_run: bool,
 ):
     """
-    Sync images from both versions of albums
-    """
-    assert from_album is not None
-
-    if to_album is None:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"[+{from_album.source[0]}] {from_album.relative_path}")
-
-        action = add_action_class(
-            what_to_add=from_album,
-            parent_to_add_to=to_folder_parent,
-            message="entire album",
-        )
-
-        await execute_action(action)
-        return
-
-    assert from_album.relative_path == to_album.relative_path
-
-    # Check if node changed (will check last update date, meta-data, etc...)
-    content_appears_the_same = False
-
-    if await from_album.deep_compare(to_album) == 0:
-        content_appears_the_same = True
-    else:
-        content_appears_the_same = False
-
-    # Figure out which of the nodes is on disk and which is on Smugmug (can go both ways)
-    if isinstance(from_album, AlbumOnDisk):
-        node_on_disk, node_on_smugmug = from_album, to_album
-    else:
-        node_on_disk, node_on_smugmug = to_album, from_album
-
-    assert isinstance(node_on_smugmug, AlbumOnSmugmug)
-    assert isinstance(node_on_disk, AlbumOnDisk)
-
-    if not content_appears_the_same:
-        # Now add a sync actions to synchronize the albums
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"[<>] [{node_on_disk.source}] {node_on_disk.relative_path}")
-
-        action = SyncAlbumsAction(
-            disk_album=node_on_disk, smugmug_album=node_on_smugmug, sync_type=sync_type
-        )
-
-        await execute_action(action)
-
-    else:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"[==] {from_album.relative_path}")
-
-    if SyncTypeAction.DELETE_ONLINE_DUPLICATES in sync_type:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                f"[DD] {from_album.relative_path} - Checking for duplicates..."
-            )
-
-        action = RemoveOnlineDuplicatesAction(smugmug_album=node_on_smugmug)
-
-        await execute_action(action)
-
-
-async def generate_sync_actions(
-    on_disk: FolderOnDisk,
-    on_smugmug: FolderOnSmugmug,
-    execute_action: Callable[[Action], Awaitable[None]],
-    sync_type: Tuple[SyncTypeAction, ...],
-):
-    """
-    Given the two scanned views (on disk and on Smugmug), generate a list of actions that will sync the two
-
-    :param on_disk: root for hierarchy on disk
-    :param on_smugmug: root for hierarchy on Smugmug
-    :param execute_action: Optional call back to be called each time an action is determined
-    :param sync_type: What to do
+    Synchronizes the two scanned view (download and/or upload)
     """
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("Generating diff...")
 
-    if SyncTypeAction.UPLOAD in sync_type:
-        await recurse_sync_folders(
-            from_folder=on_disk,
-            to_folder=on_smugmug,
-            to_folder_parent=None,
-            add_action_class=UploadAction,
-            remove_action_class=RemoveFromSmugmugAction,
-            should_delete=SyncTypeAction.DELETE_ON_CLOUD in sync_type,
-            execute_action=execute_action,
-            sync_type=sync_type,
+    # First deal with sync to the cloud
+    if sync_action.upload:
+        await synchronize_folders(
+            source_folder=on_disk,
+            target_folder=on_line,
+            target_folder_parent=None,
+            event_group=events.OnlineEventGroup,
+            sync_action=sync_action,
+            connection=connection,
+            dry_run=dry_run,
         )
 
-    if SyncTypeAction.DOWNLOAD in sync_type:
-        await recurse_sync_folders(
-            from_folder=on_smugmug,
-            to_folder=on_disk,
-            to_folder_parent=None,
-            add_action_class=DownloadAction,
-            remove_action_class=RemoveFromDiskAction,
-            should_delete=SyncTypeAction.DELETE_ON_DISK in sync_type,
-            execute_action=execute_action,
-            sync_type=sync_type,
+    # Now deal with sync locally
+    if sync_action.download:
+        await synchronize_folders(
+            source_folder=on_line,
+            target_folder=on_disk,
+            target_folder_parent=None,
+            event_group=events.DiskEventGroup,
+            sync_action=sync_action,
+            connection=connection,
+            dry_run=dry_run,
         )
+
+    # Wait until all events are processed, so we are sure everything is done before we return
+    await event_manager.join()
 
     logger.info("Done.")
 
 
-def print_summary(on_disk: FolderOnDisk, on_smugmug: FolderOnSmugmug, diff):
+async def synchronize_folders(
+        source_folder: models.Folder,
+        target_folder: models.Folder | None,
+        target_folder_parent: models.Folder | None,
+        event_group: events.EventGroup,
+        sync_action: policy.SyncAction,
+        connection: online.OnlineConnection,
+        dry_run: bool,
+):
+    """
+    Recursively sync the directory structure from source_folder (and children) into target_folder (and children).
+    The event group will determine what how each event is being handled (either Upload or Download).
+    """
+
+    assert source_folder is not None, "source_folder must always be there!"
+
+    # Wait first for all other tasks to finish before we start this one. This will allow the synchronization to be
+    # more orderly and show progress in a more meaningful way
+    await event_manager.join()
+
+    logger.info(f"Synchronizing {source_folder.relative_path}")
+
+    # If target_folder is missing - we need to add it whole
+    if target_folder is None:
+        assert target_folder_parent is not None, 'target_folder_parent should always be there!'
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"[+{source_folder.source}] {source_folder.relative_path}")
+
+        event_data = events.FolderEventData(
+            source_folder=source_folder,
+            target_parent=target_folder_parent,
+            message=f"entire folder {source_folder}",
+            connection=connection,
+        )
+
+        await event_manager.fire_event(event=event_group.FOLDER_ADD, event_data=event_data, dry_run=dry_run)
+
+    else:
+        # Both folders exist (and have same relative path)
+        assert source_folder.relative_path == target_folder.relative_path
+
+        # First process albums
+        sorted_album_names = sorted(source_folder.albums.keys())
+        for album_name in sorted_album_names:
+            source_album = source_folder.albums[album_name]
+            to_album = target_folder.albums.get(album_name)
+
+            if source_album.image_count > 0:
+                await synchronize_albums(
+                    source_album=source_album,
+                    target_album=to_album,
+                    target_folder_parent=target_folder,
+                    event_group=event_group,
+                    sync_action=sync_action,
+                    connection=connection,
+                    dry_run=dry_run,
+                )
+
+        # Now, recursively process sub folders
+        sorted_folder_names = sorted(source_folder.sub_folders.keys())
+        for sub_folder_name in sorted_folder_names:
+            source_sub_folder = source_folder.sub_folders[sub_folder_name]
+            target_sub_folder = target_folder.sub_folders.get(sub_folder_name)
+
+            await synchronize_folders(
+                source_folder=source_sub_folder,
+                target_folder=target_sub_folder,
+                target_folder_parent=target_folder,
+                event_group=event_group,
+                sync_action=sync_action,
+                connection=connection,
+                dry_run=dry_run,
+            )
+
+        if event_group.delete_permitted(sync_action):
+            # If delete is required, delete all children of 'target_folder' that do not exist in 'source_folder'
+
+            # Make a local copy of the source_album list (so we don't modify during iteration)
+            for sub_folder_name, sub_folder in dict(target_folder.sub_folders).items():
+                if sub_folder_name not in source_folder.sub_folders:
+                    await handle_delete(
+                        event=event_group.FOLDER_DELETE,
+                        event_data_class=events.DeleteFolderEventData,
+                        node_to_delete=sub_folder,
+                        parent_folder=target_folder,
+                        connection=connection,
+                        dry_run=dry_run,
+                    )
+
+            # Make a local copy of the source_album list (so we don't modify during iteration)
+            for album_name, album in dict(target_folder.albums).items():
+                if album_name not in source_folder.albums:
+                    await handle_delete(
+                        event=event_group.ALBUM_DELETE,
+                        event_data_class=events.DeleteAlbumEventData,
+                        node_to_delete=album,
+                        parent_folder=target_folder,
+                        connection=connection,
+                        dry_run=dry_run,
+                    )
+
+
+async def synchronize_albums(
+        source_album: models.Album,
+        target_album: models.Album | None,
+        target_folder_parent: models.Folder | None,
+        event_group: events.EventGroup,
+        sync_action: policy.SyncAction,
+        connection: online.OnlineConnection,
+        dry_run: bool,
+):
+    """
+    Given both disk and online version of the album exist, we need to go down to the level of images.
+    """
+    assert source_album is not None
+
+    if target_album is None:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"[+{source_album.source}] {source_album.relative_path}")
+
+        # Add a brand-new album
+        event_data = events.AlbumEventData(
+            source_album=source_album,
+            target_parent=target_folder_parent,
+            message="entire source_album",
+            connection=connection,
+        )
+
+        await event_manager.fire_event(event=event_group.ALBUM_ADD, event_data=event_data, dry_run=dry_run)
+        return
+
+    assert source_album.relative_path == target_album.relative_path
+
+    # Figure out which of the nodes is on disk and which is on Smugmug (can go both ways)
+    if source_album.is_on_disk:
+        disk_album, online_album = source_album, target_album
+    else:
+        disk_album, online_album = target_album, source_album
+
+    # Check if node changed (will check last update date, meta-data, etc...)
+    content_is_the_same = await compare_disk_and_online_albums(
+        disk_album=disk_album,
+        online_album=online_album,
+        connection=connection
+    )
+
+    if not content_is_the_same:
+        assert online_album.is_online and disk_album.is_on_disk
+
+        # Make sure online album is loaded with images
+        if online_album.requires_image_load:
+            await online.load_album_images(album=online_album, connection=connection)
+
+        if disk_album.requires_image_load:
+            disk.load_album_images(album=disk_album)
+
+        # Now add a sync actions to synchronize the albums
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"[<>] [{disk_album.source}] {disk_album.relative_path}")
+
+        event_data = events.SyncAlbumImagesEventData(
+            disk_album=disk_album,
+            online_album=online_album,
+            message="sync albums",
+            sync_action=sync_action,
+            connection=connection,
+        )
+
+        await event_manager.fire_event(event=event_group.ALBUM_SYNC, event_data=event_data, dry_run=dry_run)
+
+    else:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"[==] {source_album.relative_path}")
+
+
+async def handle_delete(
+        event: str,
+        event_data_class: Type[events.DeleteFolderEventData] | Type[events.DeleteAlbumEventData],
+        node_to_delete: models.Album | models.Folder,
+        parent_folder: models.Folder,
+        connection: online.OnlineConnection,
+        dry_run: bool,
+):
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"[-{node_to_delete.source}] {node_to_delete.relative_path}")
+
+    # Intentionally limit concurrency here...
+    # noinspection PyArgumentList
+    event_data = event_data_class(
+        target=node_to_delete,
+        parent=parent_folder,
+        message=f"delete {node_to_delete}",
+        connection=connection,
+    )
+
+    await event_manager.fire_event(
+        event=event,
+        event_data=event_data,
+        dry_run=dry_run
+    )
+
+
+async def compare_disk_and_online_albums(
+        disk_album: models.Album,
+        online_album: models.Album,
+        connection: online.OnlineConnection,
+) -> bool:
+    """
+    Perform a smart comparison between an online album and a disk album. This will take into account the last sync
+    data that was persisted (to disk) to try and speed up the scans. If needed (as a last resort), online images will
+    be downloaded queried here.
+
+    The reason we make every effort not to go to image-by-image comparison is because querying image records is the
+    slowest operation in the Smugmug API and will substantially slow down scanning.
+    """
+    assert disk_album.is_on_disk and online_album.is_online
+
+    if disk_album.relative_path != online_album.relative_path:
+        return False
+
+    if disk_album.image_count != online_album.image_count:
+        return False
+
+    # Use sync_data to see if we can shortcut the entire comparison
+    if albums_already_synced(disk_album, online_album):
+        return True
+
+    # Compare images - one by one
+    if online_album.requires_image_load:
+        await online.load_album_images(album=online_album, connection=connection)
+
+    if disk_album.requires_image_load:
+        disk.load_album_images(disk_album)
+
+    disk_images = sorted(disk_album.images, key=lambda k: k.relative_path)
+    online_images = sorted(online_album.images, key=lambda k: k.relative_path)
+
+    for disk_image, online_image in zip(disk_images, online_images):
+        if not image_tools.images_are_the_same(disk_image, online_image):
+            return False
+
+    # More compares?
+    return True
+
+
+def albums_already_synced(disk_album: models.Album, online_album: models.Album) -> bool:
+    disk_info = disk_album.disk_info
+    online_info = online_album.online_info
+
+    if disk_info.online_time is None:
+        # Never synced
+        return False
+
+    if abs(disk_info.online_time - online_info.last_updated) > DELTA:
+        # Online last update is different (online changed)
+        return False
+
+    if abs(disk_info.disk_time - disk_info.last_updated) > DELTA:
+        # Disk last update is different (disk changed) - allow 60 seconds of delay
+        return True
+
+    return True
+
+
+async def load_images_for_online_album(online_album: models.Album, connection: online.OnlineConnection):
+    if not online_album.requires_image_load:
+        return
+
+    await online.load_album_images(album=online_album, connection=connection)
+
+
+def print_summary(on_disk: models.RootFolder, on_smugmug: models.RootFolder):
     """
     Prints statistics on the list of diffs found
-
-    :param NodeOnDisk on_disk: root for hierarchy on disk
-    :param NodeOnSmugmug on_smugmug: root for hierarchy on Smugmug
-    :param list[Action] diff: List of actions to perform
     """
 
-    downloads, uploads, disk_deletions, online_deletions, syncs = 0, 0, 0, 0, 0
-
-    for d in diff:
-        if isinstance(d, DownloadAction):
-            downloads += 1
-        elif isinstance(d, UploadAction):
-            uploads += 1
-        elif isinstance(d, RemoveFromDiskAction):
-            disk_deletions += 1
-        elif isinstance(d, RemoveFromSmugmugAction):
-            online_deletions += 1
-        elif isinstance(d, SyncAlbumsAction):
-            syncs += 1
+    em = event_manager.the_events_tracker
 
     print("")
     print("Scan Results")
     print("============")
 
-    print(f"On disk                : {on_disk.stats()}")
-    print(f"Smugmug                : {on_smugmug.stats()}")
-    print(f"Actions:")
-    print(f"  Total:               : {len(diff)}")
-    print(f"  Downloads:           : {downloads}")
-    print(f"  Uploads:             : {uploads}")
-    print(f"  Deletes (disk)       : {disk_deletions}")
-    print(f"  Deletes (smugmug)    : {online_deletions}")
-    print(f"  Album syncs          : {syncs}")
-    print(f"")
+    print(f"On disk                : {on_disk.stats}")
+    print(f"Smugmug                : {on_smugmug.stats}")
+    print("Actions:")
+
+    print(f"  {'Total': <21}:               : {em.total_processed} / {em.total_submitted}")
+
+    for action_type, count in em.event_count_by_type.items():
+        print(f"  {action_type: <21}:               : {count}")
+
+    print("")

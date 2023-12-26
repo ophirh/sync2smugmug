@@ -1,13 +1,15 @@
 import asyncio
 import logging
 
-from .config import config
-from .disk.pre_process import pre_process
-from .disk.scanner import DiskScanner
-from .policy import SyncTypeAction
-from .smugmug.connection import SmugMugConnection
-from .smugmug.scanner import SmugmugScanner
-from .sync import sync, print_summary
+from sync2smugmug import sync
+from sync2smugmug.online import online
+from sync2smugmug.configuration import config
+from sync2smugmug.optimizations.disk import execute_optimizations as disk_optimizations
+from sync2smugmug.optimizations.online import execute_optimizations as online_optimizations
+from sync2smugmug.scan import disk_scanner, online_scanner
+
+# Import handlers module to register all handlers
+from sync2smugmug import handlers   # noqa
 
 logger = logging.getLogger(__name__)
 
@@ -15,34 +17,30 @@ logger = logging.getLogger(__name__)
 async def main():
     print(config)
 
-    connection = SmugMugConnection(
-        account=config.account,
-        consumer_key=config.consumer_key,
-        consumer_secret=config.consumer_secret,
-        access_token=config.access_token,
-        access_token_secret=config.access_token_secret,
-        use_test_folder=config.use_test_folder,
-    )
+    sync_action = config.sync
 
-    sync_type = config.sync
+    if sync_action.optimize_on_disk:
+        await disk_optimizations.run_disk_optimizations(dry_run=config.dry_run)
 
-    async with connection:
-        on_disk = await DiskScanner(base_dir=config.base_dir).scan()
+    async with online.open_smugmug_connection(config.connection_params) as connection:
+        if sync_action.optimize_online:
+            await online_optimizations.run_online_optimizations(connection=connection, dry_run=config.dry_run)
 
-        if SyncTypeAction.PRE_PROCESS_DISK in sync_type:
-            # Loop through disk scanning until no pre-processing is left to do left
-            # After each pre-process step - rebuild (re-scan) the disk to create a fresh state
-            while await pre_process(on_disk, dry_run=config.dry_run):
-                on_disk = await DiskScanner(base_dir=config.base_dir).scan()
+        on_disk = await disk_scanner.scan(base_dir=config.base_dir)
+        logger.info(f"Scan results (on disk): {on_disk.stats}")
 
-        logger.info(f"Scan results (on disk): {on_disk.stats()}")
+        on_smugmug = await online_scanner.scan(connection=connection)
+        logger.info(f"Scan results (on smugmug): {on_smugmug.stats}")
 
-        on_smugmug = await SmugmugScanner(connection=connection).scan()
-        logger.info(f"Scan results (on smugmug): {on_smugmug.stats()}")
+        await sync.synchronize(
+            on_disk=on_disk,
+            on_line=on_smugmug,
+            sync_action=sync_action,
+            connection=connection,
+            dry_run=config.dry_run
+        )
 
-        diff = await sync(on_disk=on_disk, on_smugmug=on_smugmug, sync_type=sync_type)
-
-    print_summary(on_disk, on_smugmug, diff)
+    sync.print_summary(on_disk, on_smugmug)
 
 
 asyncio.run(main())
