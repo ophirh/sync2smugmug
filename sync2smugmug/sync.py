@@ -28,17 +28,19 @@ async def synchronize(
         # Use the disk events and sync from online to disk
         event_group, source, target = events.DiskEventGroup, on_line, on_disk
     else:
-        raise ValueError("Neither download nor upload was requested")
+        event_group, source, target = None, None, None
+        logger.warning("Neither download nor upload was requested")
 
-    await synchronize_folders(
-        source_folder=source,
-        target_folder=target,
-        target_folder_parent=None,
-        event_group=event_group,
-        sync_action=sync_action,
-        connection=connection,
-        dry_run=dry_run,
-    )
+    if event_group is not None:
+        await synchronize_folders(
+            source_folder=source,
+            target_folder=target,
+            target_folder_parent=None,
+            event_group=event_group,
+            sync_action=sync_action,
+            connection=connection,
+            dry_run=dry_run,
+        )
 
     # Wait until all events are processed, so we are sure everything is done before we return
     await event_manager.join()
