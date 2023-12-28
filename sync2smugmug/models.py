@@ -66,8 +66,8 @@ class Image:
 @dataclass
 class Node(ABC):
     relative_path: PurePath
-    disk_info: protocols.DiskInfoShape = None
-    online_info: protocols.OnlineInfoShape = None
+    disk_info: protocols.DiskInfoShape = field(default=None, repr=False)
+    online_info: protocols.OnlineInfoShape = field(default=None, repr=False)
 
     @property
     def is_album(self) -> bool:
@@ -167,11 +167,11 @@ class Album(Node):
 
 @dataclass
 class Folder(Node):
-    disk_info: protocols.DiskFolderInfoShape = None
-    online_info: protocols.OnlineFolderInfoShape = None
+    disk_info: protocols.DiskFolderInfoShape = field(default=None, repr=False)
+    online_info: protocols.OnlineFolderInfoShape = field(default=None, repr=False)
 
-    sub_folders: Dict[str, 'Folder'] = field(default_factory=dict)
-    albums: Dict[str, Album] = field(default_factory=dict)
+    sub_folders: Dict[str, 'Folder'] = field(default_factory=dict, repr=False)
+    albums: Dict[str, Album] = field(default_factory=dict, repr=False)
 
     @property
     def is_album(self) -> bool:

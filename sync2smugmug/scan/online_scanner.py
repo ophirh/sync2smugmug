@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from sync2smugmug import models
@@ -15,24 +14,23 @@ async def scan(connection: online.OnlineConnection) -> models.RootFolder:
     :return: A root source_folder object populated with the entire smugmug hierarchy
     """
 
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(f"Scanning SmugMug (starting from {connection.root_folder_uri})...")
+    logger.info(f"Scanning SmugMug (starting from {connection.root_folder_uri})...")
 
     # Create the root node, and fetch initial online info
     root = models.RootFolder()
     root.online_info = await connection.get_folder(folder_relative_uri=connection.root_folder_uri)
 
     # Start the recursive scan from the root
-    await _scan(
+    await _scan_recursive(
         root_folder=root,
         folder=root,
-        connection=connection
+        connection=connection,
     )
 
     return root
 
 
-async def _scan(
+async def _scan_recursive(
         root_folder: models.RootFolder,
         folder: models.Folder,
         connection: online.OnlineConnection,
@@ -55,15 +53,9 @@ async def _scan(
         # Associate the source_album with our source_folder
         folder.albums[album_name] = album
 
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"{album.relative_path} - scanned")
-
         # Update target_parent counts
         root_folder.stats.album_count += 1
         root_folder.stats.image_count += album.image_count
-
-    # We will make concurrent processing on sub-folders
-    tasks = []
 
     # Recursively scan source_folder's children (either sub-folders or albums)
     async for sub_folder_record in connection.iter_sub_folders(folder.online_info):
@@ -82,16 +74,13 @@ async def _scan(
         root_folder.stats.folder_count += 1
 
         # Recursively call on this source_folder to discover the subtree
-        tasks.append(
-            asyncio.create_task(
-                _scan(
-                    root_folder=root_folder,
-                    folder=sub_folder,
-                    connection=connection,
-                )
-            )
+        await _scan_recursive(
+            root_folder=root_folder,
+            folder=sub_folder,
+            connection=connection,
         )
 
-    await asyncio.gather(*tasks)
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"{folder} - scanned ({len(folder.albums)} albums)")
 
     return folder

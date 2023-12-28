@@ -15,8 +15,7 @@ async def scan(base_dir: Path) -> models.RootFolder:
 
     :return: The root source_folder for images on disk
     """
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(f"Scanning disk (starting from {base_dir})...")
+    logger.info(f"Scanning disk (starting from {base_dir})...")
 
     # noinspection PyTypeChecker
     root = models.RootFolder(disk_info=disk.DiskFolderInfo(disk_path=base_dir))
@@ -66,8 +65,7 @@ async def scan(base_dir: Path) -> models.RootFolder:
 
         else:
             # Skip empty dirs
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Empty directory {dir_path}")
+            logger.info(f"Empty directory {dir_path}")
 
             continue
 

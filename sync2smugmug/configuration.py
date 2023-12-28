@@ -11,6 +11,9 @@ from sync2smugmug import policy
 
 @dataclasses.dataclass(frozen=True)
 class ConnectionParams:
+    """
+    Includes necessary credentials to connect to our Online Image service (e.g. Smugmug) via oauth
+    """
     account: str
     consumer_key: str
     consumer_secret: str
@@ -21,6 +24,9 @@ class ConnectionParams:
 
 @dataclasses.dataclass(frozen=True)
 class Config:
+    """
+    Global configuration object, configuration taken from config files and CLI
+    """
     sync: policy.SyncAction
     connection_params: ConnectionParams
     base_dir: Path
@@ -29,16 +35,21 @@ class Config:
 
 
 def get_config_files() -> List[Path]:
-    path_to_configs = Path(__file__).parent.parent.resolve()
+    """
+    Resolve a list of config file paths to be read (in that order) into the Configuration object
+    """
+    config_files_dir_path = Path(__file__).parent.parent.resolve()
     return [
-        path_to_configs.joinpath(p)
-        for p in ("sync2smugmug.conf", "sync2smugmug.my.conf")
+        config_files_dir_path.joinpath(config_file_name)
+        for config_file_name in ("sync2smugmug.conf", "sync2smugmug.my.conf")
     ]
 
 
-def define_command_line_parser(config_files: List[Path]) -> configargparse.ArgParser:
-    # Load command line arguments (and from config files)
-    arg_parser = configargparse.ArgParser(default_config_files=config_files)
+def parse_command_line() -> configargparse.Namespace:
+    """
+    Define the command line parser and load configuration files into it
+    """
+    arg_parser = configargparse.ArgParser(default_config_files=get_config_files())
 
     arg_parser.add_argument(
         "--sync",
@@ -47,7 +58,9 @@ def define_command_line_parser(config_files: List[Path]) -> configargparse.ArgPa
         choices=policy.SyncActionPresets.get_presets(),
     )
     arg_parser.add_argument(
-        "--base_dir", required=True, help="Full path to pictures source_folder"
+        "--base_dir",
+        required=True,
+        help="Full path to pictures source_folder"
     )
     arg_parser.add_argument(
         "--mac_photos_library_location",
@@ -55,13 +68,19 @@ def define_command_line_parser(config_files: List[Path]) -> configargparse.ArgPa
         help="Full path for Mac Photos library",
     )
     arg_parser.add_argument(
-        "--account", required=True, help="Name (nickname) of SmugMug account"
+        "--account",
+        required=True,
+        help="Name (nickname) of SmugMug account"
     )
     arg_parser.add_argument(
-        "--consumer_key", required=True, help="Smugmug API key of this account"
+        "--consumer_key",
+        required=True,
+        help="Smugmug API key of this account"
     )
     arg_parser.add_argument(
-        "--consumer_secret", required=True, help="Smugmug API secret of this account"
+        "--consumer_secret",
+        required=True,
+        help="Smugmug API secret of this account"
     )
     arg_parser.add_argument(
         "--access_token",
@@ -73,8 +92,16 @@ def define_command_line_parser(config_files: List[Path]) -> configargparse.ArgPa
         required=True,
         help="Smugmug oauth secret obtained for this script",
     )
-    arg_parser.add_argument("--dry_run", action="store_true", default=False)
-    arg_parser.add_argument("--test_upload", action="store_true", default=False)
+    arg_parser.add_argument(
+        "--dry_run",
+        action="store_true",
+        default=False
+    )
+    arg_parser.add_argument(
+        "--test_upload",
+        action="store_true",
+        default=False
+    )
     arg_parser.add_argument(
         "--log_level",
         required=False,
@@ -82,35 +109,44 @@ def define_command_line_parser(config_files: List[Path]) -> configargparse.ArgPa
         default="INFO",
     )
 
-    return arg_parser
+    return arg_parser.parse_args()
 
 
 def configure_logging(log_level: str):
-    # Configure logger
+    """
+    Configure logging
+    """
     logging.basicConfig(
         stream=sys.stdout,
-        level=getattr(logging, log_level),
-        format="%(asctime)s - %(message)s",
+        level=log_level,
+        format="[%(name)s %(levelname)s] %(asctime)s - %(message)s",
     )
+
+    logging.getLogger().setLevel(log_level)
 
     # Silence the very verbose networking libraries
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore.http11").setLevel(logging.WARNING)
+    logging.getLogger("httpcore.connection").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("osxphotos").setLevel(logging.WARNING)
+
+    # Work around a problem with osxphotos
+    import osxphotos.debug
+    osxphotos.debug.set_debug(True)
 
 
-def parse_config() -> Config:
-    config_files = get_config_files()
-    arg_parser = define_command_line_parser(config_files)
-
-    args = arg_parser.parse_args()
+def make_config() -> Config:
+    args = parse_command_line()
 
     configure_logging(args.log_level)
 
     base_dir = Path(args.base_dir).expanduser()
     assert base_dir.exists(), f"Base dir {base_dir} does not exist!"
 
-    method = getattr(policy.SyncActionPresets, args.sync)
-    sync = method()
+    preset_method = getattr(policy.SyncActionPresets, args.sync)
+    sync_preset = preset_method()
 
     if args.mac_photos_library_location:
         mac_photos_library_location = Path(args.mac_photos_library_location).expanduser()
@@ -119,22 +155,20 @@ def parse_config() -> Config:
     else:
         mac_photos_library_location = None
 
-    connection_params = ConnectionParams(
-        account=args.account,
-        consumer_key=args.consumer_key,
-        consumer_secret=args.consumer_secret,
-        access_token=args.access_token,
-        access_token_secret=args.access_token_secret,
-        test_upload=args.test_upload,
-    )
-
     return Config(
-        sync=sync,
-        connection_params=connection_params,
+        sync=sync_preset,
+        connection_params=ConnectionParams(
+            account=args.account,
+            consumer_key=args.consumer_key,
+            consumer_secret=args.consumer_secret,
+            access_token=args.access_token,
+            access_token_secret=args.access_token_secret,
+            test_upload=args.test_upload,
+        ),
         base_dir=base_dir,
         dry_run=args.dry_run,
         mac_photos_library_location=mac_photos_library_location,
     )
 
 
-config: Config = parse_config()
+config: Config = make_config()

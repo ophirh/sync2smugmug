@@ -139,7 +139,9 @@ def delete_image_from_disk(image: models.Image, dry_run: bool):
 
 
 def iter_image_files(dir_path_to_scan: Path) -> Generator[Tuple[Path, Path], None, None]:
-    # Add support for 'Developed' sub-source_folder.
+    # Add support for 'Developed' sub-source_folder. This is a special case when working with LightRoom and developing
+    # raw images. The developed version of the image was exported as a jpeg into a sub-folder called 'Developed'. In
+    # this case, while the physical file is under 'Developed', the logical path is where the photo should have been.
     developed_images = {}
     developed_images_sub_folder = dir_path_to_scan.joinpath('Developed')
 

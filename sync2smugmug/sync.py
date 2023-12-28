@@ -20,37 +20,30 @@ async def synchronize(
     """
     Synchronizes the two scanned view (download and/or upload)
     """
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug("Generating diff...")
 
-    # First deal with sync to the cloud
     if sync_action.upload:
-        await synchronize_folders(
-            source_folder=on_disk,
-            target_folder=on_line,
-            target_folder_parent=None,
-            event_group=events.OnlineEventGroup,
-            sync_action=sync_action,
-            connection=connection,
-            dry_run=dry_run,
-        )
+        # Use the online events and sync from disk to online
+        event_group, source, target = events.OnlineEventGroup, on_disk, on_line
+    elif sync_action.download:
+        # Use the disk events and sync from online to disk
+        event_group, source, target = events.DiskEventGroup, on_line, on_disk
+    else:
+        raise ValueError("Neither download nor upload was requested")
 
-    # Now deal with sync locally
-    if sync_action.download:
-        await synchronize_folders(
-            source_folder=on_line,
-            target_folder=on_disk,
-            target_folder_parent=None,
-            event_group=events.DiskEventGroup,
-            sync_action=sync_action,
-            connection=connection,
-            dry_run=dry_run,
-        )
+    await synchronize_folders(
+        source_folder=source,
+        target_folder=target,
+        target_folder_parent=None,
+        event_group=event_group,
+        sync_action=sync_action,
+        connection=connection,
+        dry_run=dry_run,
+    )
 
     # Wait until all events are processed, so we are sure everything is done before we return
     await event_manager.join()
 
-    logger.info("Done.")
+    logger.info("Synchronization complete.")
 
 
 async def synchronize_folders(
@@ -79,8 +72,7 @@ async def synchronize_folders(
     if target_folder is None:
         assert target_folder_parent is not None, 'target_folder_parent should always be there!'
 
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"[+{source_folder.source}] {source_folder.relative_path}")
+        logger.info(f"[+{source_folder.source}] {source_folder.relative_path}")
 
         event_data = events.FolderEventData(
             source_folder=source_folder,
@@ -173,8 +165,7 @@ async def synchronize_albums(
     assert source_album is not None
 
     if target_album is None:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"[+{source_album.source}] {source_album.relative_path}")
+        logger.info(f"[+{source_album.source}] {source_album.relative_path}")
 
         # Add a brand-new album
         event_data = events.AlbumEventData(
@@ -213,8 +204,7 @@ async def synchronize_albums(
             disk.load_album_images(album=disk_album)
 
         # Now add a sync actions to synchronize the albums
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"[<>] [{disk_album.source}] {disk_album.relative_path}")
+        logger.info(f"[<>] [{disk_album.source}] {disk_album.relative_path}")
 
         event_data = events.SyncAlbumImagesEventData(
             disk_album=disk_album,
@@ -239,8 +229,7 @@ async def handle_delete(
         connection: online.OnlineConnection,
         dry_run: bool,
 ):
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(f"[-{node_to_delete.source}] {node_to_delete.relative_path}")
+    logger.info(f"[-{node_to_delete.source}] {node_to_delete.relative_path}")
 
     # Intentionally limit concurrency here...
     # noinspection PyArgumentList
@@ -283,6 +272,8 @@ async def compare_disk_and_online_albums(
     if albums_already_synced(disk_album, online_album):
         return True
 
+    logger.info(f"[^^] Loading images for comparison {online_album}")
+
     # Compare images - one by one
     if online_album.requires_image_load:
         await online.load_album_images(album=online_album, connection=connection)
@@ -305,6 +296,8 @@ def albums_already_synced(disk_album: models.Album, online_album: models.Album) 
     disk_info = disk_album.disk_info
     online_info = online_album.online_info
 
+    assert disk_info is not None and online_info is not None
+
     if disk_info.online_time is None:
         # Never synced
         return False
@@ -314,7 +307,7 @@ def albums_already_synced(disk_album: models.Album, online_album: models.Album) 
         return False
 
     if abs(disk_info.disk_time - disk_info.last_updated) > DELTA:
-        # Disk last update is different (disk changed) - allow 60 seconds of delay
+        # Disk last update is different (disk changed)
         return True
 
     return True
