@@ -55,7 +55,7 @@ def parse_command_line() -> configargparse.Namespace:
         "--sync",
         required=True,
         help="Type of sync to perform (choose one of the available presets)",
-        choices=policy.SyncActionPresets.get_presets(),
+        choices=policy.get_presets(),
     )
     arg_parser.add_argument(
         "--base_dir",
