@@ -8,7 +8,7 @@ from sync2smugmug.utils import image_tools
 
 logger = logging.getLogger(__name__)
 
-DELTA = 360.0  # 60 seconds to allow between online and disk clocks
+DELTA = 360.0  # 360 seconds to allow between online and disk clocks
 
 
 async def synchronize(
