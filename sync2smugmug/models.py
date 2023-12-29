@@ -34,8 +34,8 @@ supported_image_types = {
 class Image:
     album_relative_path: PurePath
     filename: PurePath
-    disk_info: protocols.DiskImageInfoShape = None
-    online_info: protocols.OnlineImageInfoShape = None
+    disk_info: protocols.DiskImageInfoShape = field(default=None, repr=False)
+    online_info: protocols.OnlineImageInfoShape = field(default=None, repr=False)
 
     @cached_property
     def image_type(self) -> ImageType:

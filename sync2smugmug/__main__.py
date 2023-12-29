@@ -26,21 +26,22 @@ async def main():
         if sync_action.optimize_online:
             await online_optimizations.run_online_optimizations(connection=connection, dry_run=config.dry_run)
 
-        on_disk = await disk_scanner.scan(base_dir=config.base_dir)
-        logger.info(f"Scan results (on disk): {on_disk.stats}")
+        if sync_action.upload or sync_action.download:
+            on_disk = await disk_scanner.scan(base_dir=config.base_dir)
+            logger.info(f"Scan results (on disk): {on_disk.stats}")
 
-        on_smugmug = await online_scanner.scan(connection=connection)
-        logger.info(f"Scan results (on smugmug): {on_smugmug.stats}")
+            on_smugmug = await online_scanner.scan(connection=connection)
+            logger.info(f"Scan results (on smugmug): {on_smugmug.stats}")
 
-        await sync.synchronize(
-            on_disk=on_disk,
-            on_line=on_smugmug,
-            sync_action=sync_action,
-            connection=connection,
-            dry_run=config.dry_run
-        )
+            await sync.synchronize(
+                on_disk=on_disk,
+                on_line=on_smugmug,
+                sync_action=sync_action,
+                connection=connection,
+                dry_run=config.dry_run
+            )
 
-    sync.print_summary(on_disk, on_smugmug)
+            sync.print_summary(on_disk, on_smugmug)
 
 
 asyncio.run(main())

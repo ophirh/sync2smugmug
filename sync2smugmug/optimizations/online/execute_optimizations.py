@@ -1,7 +1,7 @@
 import logging
 from typing import Iterable
 
-from sync2smugmug.optimizations.online import OnlineOptimization, duplicates
+from sync2smugmug.optimizations.online import OnlineOptimization, duplicates, cleanup
 from sync2smugmug.configuration import config
 from sync2smugmug import models
 from sync2smugmug.online import online
@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 async def run_online_optimizations(connection: online.OnlineConnection, dry_run: bool):
     # List all the optimizations currently available (order matters)
     optimizations: Iterable[OnlineOptimization] = (
+        cleanup.DeleteEmptyAlbums(config.base_dir),
         duplicates.RemoveOnlineImageDuplicates(config.base_dir),
         # Add more optimizations here...
         # TODO: Scan for online nodes with "Processing" = True (these are bad) - and delete

@@ -45,7 +45,7 @@ class SyncActionPresets:
         """
         Run optimizations only
         """
-        return SyncAction(optimize_on_disk=True, optimize_online=True)
+        return SyncAction(optimize_on_disk=True, optimize_online=False)
 
 
 def get_presets() -> List[str]:

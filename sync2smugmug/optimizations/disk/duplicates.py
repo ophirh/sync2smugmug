@@ -46,11 +46,18 @@ class DeleteImageDuplicates(DiskOptimization):
 
         for image_name, candidates in duplicate_candidates_l1.items():
             for date_album, image in candidates:
+                time_taken = image_tools.extract_image_time_taken(image.disk_info.disk_path, image.image_type)
+                camera_model = image_tools.extract_image_camera_model(image.disk_info.disk_path, image.image_type)
+
+                if time_taken is None or camera_model is None:
+                    # Since we cannot extract metadata, we will not take the risk of image name only
+                    continue
+
                 key = (
                     image_name,
                     image.disk_info.size,
-                    image_tools.extract_image_time_taken(image.disk_info.disk_path, image.image_type),
-                    image_tools.extract_image_camera_model(image.disk_info.disk_path, image.image_type),
+                    time_taken,
+                    camera_model,
                 )
 
                 duplicate_candidates_l2[key].append((date_album, image))

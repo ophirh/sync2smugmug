@@ -69,7 +69,8 @@ def extract_image_time_taken(disk_path: Path, image_type: models.ImageType) -> d
         # Parse the date!
         return datetime.strptime(datetime_str, "%Y:%m:%d %H:%M:%S")
     except ValueError:
-        logger.exception(f"Failed to parse date for {disk_path}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(f"Failed to parse date for {disk_path}")
         return None
 
 
