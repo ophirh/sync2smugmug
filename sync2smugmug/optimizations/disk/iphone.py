@@ -106,10 +106,11 @@ class ImportIPhoneImages(DiskOptimization):
                 options=options
             )
 
-            last_import_date = max(last_import_date, photo.date)
+            if export_result.exported:
+                last_import_date = max(last_import_date, photo.date)
 
-            logger.info(f"Imported iphone photo {photo.original_filename} as ({export_result.exported[0]})")
-            requires_reload = True
+                logger.info(f"Imported iphone photo {photo.original_filename} as ({export_result.exported[0]})")
+                requires_reload = True
 
         if not requires_reload:
             logger.info("No iPhone images imported")
