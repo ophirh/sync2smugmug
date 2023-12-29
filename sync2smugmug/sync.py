@@ -1,13 +1,14 @@
 import logging
-from typing import Type
+from typing import Type, Tuple
 
 from sync2smugmug import models, policy, events, event_manager, disk
+from sync2smugmug.configuration import config
 from sync2smugmug.online import online
 from sync2smugmug.utils import image_tools
 
 logger = logging.getLogger(__name__)
 
-DELTA = 60.0  # 60 seconds to allow between online and disk clocks
+DELTA = 360.0  # 60 seconds to allow between online and disk clocks
 
 
 async def synchronize(
@@ -74,7 +75,7 @@ async def synchronize_folders(
     if target_folder is None:
         assert target_folder_parent is not None, 'target_folder_parent should always be there!'
 
-        logger.info(f"[+{source_folder.source}] {source_folder.relative_path}")
+        logger.info(f"[++] {source_folder}")
 
         event_data = events.FolderEventData(
             source_folder=source_folder,
@@ -167,7 +168,7 @@ async def synchronize_albums(
     assert source_album is not None
 
     if target_album is None:
-        logger.info(f"[+{source_album.source}] {source_album.relative_path}")
+        logger.info(f"[++] {source_album}")
 
         # Add a brand-new album
         event_data = events.AlbumEventData(
@@ -189,7 +190,7 @@ async def synchronize_albums(
         disk_album, online_album = target_album, source_album
 
     # Check if node changed (will check last update date, meta-data, etc...)
-    content_is_the_same = await compare_disk_and_online_albums(
+    content_is_the_same, it_was_quick = await compare_disk_and_online_albums(
         disk_album=disk_album,
         online_album=online_album,
         connection=connection
@@ -206,7 +207,7 @@ async def synchronize_albums(
             disk.load_album_images(album=disk_album)
 
         # Now add a sync actions to synchronize the albums
-        logger.info(f"[<>] [{disk_album.source}] {disk_album.relative_path}")
+        logger.info(f"[<>] {disk_album} != {online_album}")
 
         event_data = events.SyncAlbumImagesEventData(
             disk_album=disk_album,
@@ -222,6 +223,11 @@ async def synchronize_albums(
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"[==] {source_album.relative_path}")
 
+    if disk_album.disk_info.disk_time is None or not it_was_quick:
+        # Special case #1: If we don't have sync data yet, make it now
+        # Special case #2: The comparison had to go through more thorough checking before concluding equality
+        disk_album.disk_info.remember_sync(online_album.online_info.last_updated)
+
 
 async def handle_delete(
         event: str,
@@ -231,7 +237,7 @@ async def handle_delete(
         connection: online.OnlineConnection,
         dry_run: bool,
 ):
-    logger.info(f"[-{node_to_delete.source}] {node_to_delete.relative_path}")
+    logger.info(f"[--] {node_to_delete}")
 
     # Intentionally limit concurrency here...
     # noinspection PyArgumentList
@@ -253,7 +259,7 @@ async def compare_disk_and_online_albums(
         disk_album: models.Album,
         online_album: models.Album,
         connection: online.OnlineConnection,
-) -> bool:
+) -> Tuple[bool, bool]:
     """
     Perform a smart comparison between an online album and a disk album. This will take into account the last sync
     data that was persisted (to disk) to try and speed up the scans. If needed (as a last resort), online images will
@@ -261,18 +267,20 @@ async def compare_disk_and_online_albums(
 
     The reason we make every effort not to go to image-by-image comparison is because querying image records is the
     slowest operation in the Smugmug API and will substantially slow down scanning.
+
+    returns a bool to indicate if albums are the same and a second bool to indicate if this was a quick comparison
     """
     assert disk_album.is_on_disk and online_album.is_online
 
-    if disk_album.relative_path != online_album.relative_path:
-        return False
-
-    if disk_album.image_count != online_album.image_count:
-        return False
-
     # Use sync_data to see if we can shortcut the entire comparison
     if albums_already_synced(disk_album, online_album):
-        return True
+        return True, True
+
+    if disk_album.relative_path != online_album.relative_path:
+        return False, True
+
+    if disk_album.image_count != online_album.image_count:
+        return False, True
 
     logger.info(f"[^^] Loading images for comparison {online_album}")
 
@@ -288,10 +296,10 @@ async def compare_disk_and_online_albums(
 
     for disk_image, online_image in zip(disk_images, online_images):
         if not image_tools.images_are_the_same(disk_image, online_image):
-            return False
+            return False, False
 
     # More compares?
-    return True
+    return True, False
 
 
 def albums_already_synced(disk_album: models.Album, online_album: models.Album) -> bool:
@@ -299,6 +307,10 @@ def albums_already_synced(disk_album: models.Album, online_album: models.Album) 
     online_info = online_album.online_info
 
     assert disk_info is not None and online_info is not None
+
+    if config.force_refresh:
+        # In this case, we are specifically asked to reload everything
+        return False
 
     if disk_info.online_time is None:
         # Never synced

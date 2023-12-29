@@ -1,4 +1,5 @@
 import logging
+import shutil
 from pathlib import Path
 
 from sync2smugmug.optimizations.disk import DiskOptimization
@@ -19,11 +20,11 @@ class DeleteEmptyDirectories(DiskOptimization):
         return requires_reload
 
     def _scan(self, dir_path: Path, dry_run: bool) -> bool:
-        if node_tools.dir_is_empty(dir_path):
+        if node_tools.dir_is_empty_of_pictures(dir_path):
             logger.warning(f"Deleting empty dir {dir_path}")
 
             if not dry_run:
-                dir_path.rmdir()
+                shutil.rmtree(dir_path)
 
             return True
 

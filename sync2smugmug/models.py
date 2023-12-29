@@ -62,6 +62,13 @@ class Image:
     def __eq__(self, other):
         return self.relative_path == other.relative_path
 
+    def __repr__(self) -> str:
+        """
+        Override the default repr to better represent the image
+        """
+        qualifier = "Disk" if self.is_on_disk else "Online"
+        return f"{qualifier}Image(relative_path='{self.relative_path}')"
+
 
 @dataclass
 class Node(ABC):
@@ -85,15 +92,6 @@ class Node(ABC):
     @property
     def is_online(self) -> bool:
         return self.online_info is not None
-
-    @property
-    def source(self) -> str:
-        if self.is_on_disk:
-            return "D"
-        elif self.is_online:
-            return "O"
-        else:
-            return "?"
 
     def __eq__(self, other):
         return self.relative_path == other.relative_path
@@ -164,6 +162,13 @@ class Album(Node):
         # Fall back - compare the strings
         return self.relative_path < other.relative_path
 
+    def __repr__(self) -> str:
+        """
+        Override the default repr to better represent the node
+        """
+        qualifier = "Disk" if self.is_on_disk else "Online"
+        return f"{qualifier}{self.__class__.__name__}(relative_path='{self.relative_path}')"
+
 
 @dataclass
 class Folder(Node):
@@ -176,6 +181,13 @@ class Folder(Node):
     @property
     def is_album(self) -> bool:
         return False
+
+    def __repr__(self) -> str:
+        """
+        Override the default repr to better represent the node
+        """
+        qualifier = "Disk" if self.is_on_disk else "Online"
+        return f"{qualifier}{self.__class__.__name__}(relative_path='{self.relative_path}')"
 
 
 @dataclass

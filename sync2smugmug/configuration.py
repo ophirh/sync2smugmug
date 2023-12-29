@@ -30,6 +30,7 @@ class Config:
     sync: policy.SyncAction
     connection_params: ConnectionParams
     base_dir: Path
+    force_refresh: bool
     dry_run: bool
     mac_photos_library_location: Path = None
 
@@ -91,6 +92,11 @@ def parse_command_line() -> configargparse.Namespace:
         "--access_token_secret",
         required=True,
         help="Smugmug oauth secret obtained for this script",
+    )
+    arg_parser.add_argument(
+        "--force_refresh",
+        action="store_true",
+        default=False
     )
     arg_parser.add_argument(
         "--dry_run",
@@ -166,6 +172,7 @@ def make_config() -> Config:
             test_upload=args.test_upload,
         ),
         base_dir=base_dir,
+        force_refresh=args.force_refresh,
         dry_run=args.dry_run,
         mac_photos_library_location=mac_photos_library_location,
     )

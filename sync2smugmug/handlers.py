@@ -268,8 +268,8 @@ async def sync_albums(event_data: events.SyncAlbumImagesEventData, dry_run: bool
         disk.load_album_images(album=event_data.disk_album)
         await online.load_album_images(album=event_data.online_album, connection=event_data.connection)
 
-        if not dry_run:
-            # Update the sync data for these albums
-            event_data.disk_album.disk_info.remember_sync(event_data.online_album.online_info.last_updated)
+    if not dry_run:
+        # Update the sync data for these albums
+        event_data.disk_album.disk_info.remember_sync(event_data.online_album.online_info.last_updated)
 
     return changed

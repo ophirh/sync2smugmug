@@ -7,10 +7,14 @@ from sync2smugmug import models
 from sync2smugmug.configuration import config
 
 
-def dir_is_empty(disk_path: Path) -> bool:
+def dir_is_empty_of_pictures(disk_path: Path) -> bool:
     """ Return True only if directory is completely empty """
-    has_files = any(True for _ in disk_path.iterdir())
-    return not has_files
+    has_only_metadata_files = all(
+        not fp.is_dir() and fp.suffix in ('.ini', '.json', '.info')
+        for fp in disk_path.iterdir()
+    )
+
+    return has_only_metadata_files
 
 
 def to_disk_path(relative_path: PurePath) -> Path:
