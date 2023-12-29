@@ -25,7 +25,6 @@ class SyncActionPresets:
         return dataclasses.replace(
             cls.local_backup(),
             delete_on_disk=True,
-            optimize_on_disk=True,
         )
 
     @classmethod
@@ -37,7 +36,6 @@ class SyncActionPresets:
         return dataclasses.replace(
             cls.online_backup(),
             delete_online=True,
-            optimize_online=True
         )
 
     @classmethod
