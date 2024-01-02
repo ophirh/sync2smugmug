@@ -34,13 +34,12 @@ class DiskAlbumInfo:
 
     def __post_init__(self):
         if self.sync_file_path.exists():
-            # noinspection PyBroadException
             try:
                 with self.sync_file_path.open() as f:
                     d = json.load(f)
                     self.sync_data = SyncData(**d)
 
-            except Exception:
+            except Exception:   # noqa
                 # On any error reading the JSON, just reset the data
                 self.remember_sync(None)
 
@@ -109,19 +108,17 @@ def create_album_disk_info(parent_disk_path: Path, album_name: str, dry_run: boo
     if not dry_run:
         album_disk_path.mkdir(exist_ok=True)
 
-    # noinspection PyTypeChecker
-    return DiskAlbumInfo(disk_path=album_disk_path)
+    return DiskAlbumInfo(disk_path=album_disk_path) # noqa
 
 
 def load_album_images(album: models.Album):
     images: List[models.Image] = []
 
     for image_path, developed_path in iter_image_files(dir_path_to_scan=album.disk_info.disk_path):
-        # noinspection PyTypeChecker
         image = models.Image(
             album_relative_path=album.relative_path,
             filename=PurePath(image_path.name),
-            disk_info=DiskImageInfo(image_disk_path=image_path, developed_disk_path=developed_path)
+            disk_info=DiskImageInfo(image_disk_path=image_path, developed_disk_path=developed_path) # noqa
         )
         images.append(image)
 
@@ -162,5 +159,4 @@ def create_folder(parent: models.Folder, folder_name: str, dry_run: bool) -> pro
     if not dry_run:
         folder_disk_path.mkdir(exist_ok=True)
 
-    # noinspection PyTypeChecker
-    return DiskFolderInfo(disk_path=folder_disk_path)
+    return DiskFolderInfo(disk_path=folder_disk_path)   # noqa

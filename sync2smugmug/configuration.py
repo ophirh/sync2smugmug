@@ -122,6 +122,10 @@ def configure_logging(log_level: str):
     """
     Configure logging
     """
+    # Work around a problem with osxphotos (it calls logging.basicConfig directly, so we want to import it first, then
+    # override with our own basicConfig)
+    import osxphotos    # noqa
+
     logging.basicConfig(
         stream=sys.stdout,
         level=log_level,
@@ -137,10 +141,6 @@ def configure_logging(log_level: str):
     logging.getLogger("httpcore.connection").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("osxphotos").setLevel(logging.WARNING)
-
-    # Work around a problem with osxphotos
-    import osxphotos.debug
-    osxphotos.debug.set_debug(True)
 
 
 def make_config() -> Config:

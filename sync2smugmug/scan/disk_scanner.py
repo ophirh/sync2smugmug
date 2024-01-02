@@ -17,8 +17,7 @@ async def scan(base_dir: Path) -> models.RootFolder:
     """
     logger.info(f"Scanning disk (starting from {base_dir})...")
 
-    # noinspection PyTypeChecker
-    root = models.RootFolder(disk_info=disk.DiskFolderInfo(disk_path=base_dir))
+    root = models.RootFolder(disk_info=disk.DiskFolderInfo(disk_path=base_dir)) # noqa
 
     # Keep a lookup table to be able to get the node (by path) for quick access during the os.walk
     # Parents will always be created before children, so we can assume that a lookup will be successful
@@ -39,10 +38,9 @@ async def scan(base_dir: Path) -> models.RootFolder:
 
         # Figure out if this is an Album of a Folder
         if has_images(dir_path):  # A source_album has images
-            # noinspection PyTypeChecker
             album = models.Album(
                 relative_path=dir_relative_path,
-                disk_info=disk.DiskAlbumInfo(disk_path=dir_path),
+                disk_info=disk.DiskAlbumInfo(disk_path=dir_path),   # noqa
             )
 
             disk.load_album_images(album=album)
@@ -53,10 +51,9 @@ async def scan(base_dir: Path) -> models.RootFolder:
             root.stats.image_count += album.image_count
 
         elif has_sub_folders(dir_path):  # A source_folder has sub-folders
-            # noinspection PyTypeChecker
             folder = models.Folder(
                 relative_path=dir_relative_path,
-                disk_info=disk.DiskFolderInfo(disk_path=dir_path)
+                disk_info=disk.DiskFolderInfo(disk_path=dir_path)   # noqa
             )
             parent_folder.sub_folders[folder.name] = folder
 

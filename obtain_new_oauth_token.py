@@ -1,6 +1,6 @@
 import json
 import pprint
-from typing import Tuple, List
+from typing import Tuple, List, Any
 from urllib.parse import urlencode, urlunsplit, parse_qsl, urlsplit
 
 from rauth import OAuth1Session, OAuth1Service
@@ -27,12 +27,12 @@ def get_service() -> OAuth1Service:
     return service
 
 
-def add_auth_params(auth_url: str, access: str = None, permissions: str = None):
+def add_auth_params(auth_url: str, access: str = None, permissions: str = None) -> str:
     if access is None and permissions is None:
         return auth_url
 
     parts = urlsplit(auth_url)
-    query: List[Tuple] = parse_qsl(parts.query, True)
+    query: List[Tuple[str, Any]] = parse_qsl(parts.query, True)
     if access is not None:
         query.append(("Access", access))
 
@@ -40,7 +40,13 @@ def add_auth_params(auth_url: str, access: str = None, permissions: str = None):
         query.append(("Permissions", permissions))
 
     return urlunsplit(
-        (parts.scheme, parts.netloc, parts.path, urlencode(query, True), parts.fragment)
+        components=(
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(query, True),
+            parts.fragment,
+        )
     )
 
 
@@ -60,7 +66,9 @@ def main():
     # Second, we need to give the user the web URL where they can authorize our
     # application.
     auth_url: str = add_auth_params(
-        service.get_authorize_url(rt), access="Full", permissions="Modify"
+        service.get_authorize_url(rt),
+        access="Full",
+        permissions="Modify",
     )
     print(f"Go to {auth_url} in a web browser.")
 

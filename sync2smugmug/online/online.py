@@ -28,8 +28,7 @@ class OnlineConnection:
 
     async def get_folder(self, folder_relative_uri: str) -> protocols.OnlineFolderInfoShape:
         r = await self._conn.request_get(folder_relative_uri)
-        # noinspection PyTypeChecker
-        return smugmug.SmugmugFolder(r["Folder"])
+        return smugmug.SmugmugFolder(r["Folder"])   # noqa
 
     async def iter_album_images(
             self,
@@ -80,8 +79,7 @@ class OnlineConnection:
             },
         )
 
-        # noinspection PyTypeChecker
-        return smugmug.SmugmugFolder(r["Folder"])
+        return smugmug.SmugmugFolder(r["Folder"])   # noqa
 
     async def create_album_online_info(
             self,
@@ -127,8 +125,7 @@ class OnlineConnection:
         #     },
         # )
 
-        # noinspection PyTypeChecker
-        return smugmug.SmugmugAlbum(r["Album"])
+        return smugmug.SmugmugAlbum(r["Album"]) # noqa
 
     async def download_images(self, images: Iterable[protocols.OnlineImageInfoShape], to_folder: Path, dry_run: bool):
         """
@@ -144,9 +141,8 @@ class OnlineConnection:
 
         # Download one by one! Concurrency will be handled on the event level
         for image in images:
-            # noinspection PyTypeChecker
             await self._conn.request_download(
-                image_uri=await self._get_image_download_url(image),
+                image_uri=await self._get_image_download_url(image),    # noqa
                 local_path=to_folder.joinpath(image.name),
             )
 

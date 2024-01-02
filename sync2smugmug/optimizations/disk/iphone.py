@@ -147,10 +147,9 @@ def find_or_create_parent_folder(
     if parent_folder is None:
         disk_path = node_tools.to_disk_path(parent_folder_relative_path)
 
-        # noinspection PyTypeChecker
         parent_folder = models.Folder(
             relative_path=parent_folder_relative_path,
-            disk_info=disk.DiskFolderInfo(disk_path=disk_path)
+            disk_info=disk.DiskFolderInfo(disk_path=disk_path)  # noqa
         )
 
         disk_path.mkdir(parents=True, exist_ok=True)
@@ -187,10 +186,9 @@ def find_or_create_album(
     album_disk_path = parent_folder.disk_info.disk_path.joinpath(album_name)
     album_disk_path.mkdir(exist_ok=True)
 
-    # noinspection PyTypeChecker
     album = models.Album(
         relative_path=parent_folder.relative_path.joinpath(album_name),
-        disk_info=disk.DiskAlbumInfo(disk_path=album_disk_path),
+        disk_info=disk.DiskAlbumInfo(disk_path=album_disk_path),    # noqa
     )
 
     return album, True

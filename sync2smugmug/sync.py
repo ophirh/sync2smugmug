@@ -240,8 +240,7 @@ async def handle_delete(
     logger.info(f"[--] {node_to_delete}")
 
     # Intentionally limit concurrency here...
-    # noinspection PyArgumentList
-    event_data = event_data_class(
+    event_data = event_data_class(  # noqa PyCharm does not properly recognize dataclass constructors
         target=node_to_delete,
         parent=parent_folder,
         message=f"delete {node_to_delete}",
