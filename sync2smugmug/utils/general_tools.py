@@ -22,7 +22,7 @@ def timeit(func):
 
         elapsed = time.time() - start
         if elapsed > 1:
-            logger.info(f"!---- '{func.__name__}' execution time: {elapsed:.2f} sec ----!")
+            logger.info(f"!---- '{func.__module__}.{func.__name__}' execution time: {elapsed:.2f} sec ----!")
 
         return result
 

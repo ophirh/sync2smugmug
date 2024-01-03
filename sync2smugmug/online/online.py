@@ -4,6 +4,7 @@ import pathlib
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Generator, List, Iterable
+from types import MappingProxyType
 
 from sync2smugmug import protocols, models, configuration, disk
 from sync2smugmug.online import smugmug
@@ -79,7 +80,8 @@ class OnlineConnection:
             },
         )
 
-        return smugmug.SmugmugFolder(r["Folder"])   # noqa
+        # Construct with a read-only version of the record
+        return smugmug.SmugmugFolder(MappingProxyType(r["Folder"]))   # noqa
 
     async def create_album_online_info(
             self,

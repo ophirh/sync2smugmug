@@ -21,18 +21,14 @@ async def run_disk_optimizations(dry_run: bool):
         # # Add more optimizations here...
     )
 
-    logger.info("-" * 80)
-
     requires_reload = True
     on_disk: models.RootFolder | None = None
 
     for optimization in optimizations:
-        logger.info(f"--- Running {optimization}")
+        logger.info(f"Running {optimization}...")
 
         if requires_reload or on_disk is None:
             # Rescan to have a fresh hierarchy after changes were made
             on_disk = await disk_scanner.scan(base_dir=config.base_dir)
 
         requires_reload = await optimization.perform(on_disk=on_disk, dry_run=dry_run)
-
-    logger.info("-" * 80)

@@ -125,11 +125,13 @@ def configure_logging(log_level: str):
     # Work around a problem with osxphotos (it calls logging.basicConfig directly, so we want to import it first, then
     # override with our own basicConfig)
     import osxphotos    # noqa
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
 
     logging.basicConfig(
         stream=sys.stdout,
         level=log_level,
-        format="[%(name)s %(levelname)s] %(asctime)s - %(message)s",
+        format="%(asctime)s - [%(levelname)s] %(message)s",
     )
 
     logging.getLogger().setLevel(log_level)
