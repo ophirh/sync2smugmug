@@ -1,4 +1,5 @@
 import logging
+import pathlib
 from datetime import date, datetime
 from pathlib import Path, PurePath
 
@@ -6,8 +7,9 @@ import osxphotos
 from dateutil.tz import UTC
 
 from sync2smugmug import disk, models
-from sync2smugmug.optimizations.disk import DiskOptimization
 from sync2smugmug.utils import general_tools, node_tools
+
+from .base import DiskOptimization
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +56,9 @@ class ImportIPhoneImages(DiskOptimization):
             if photo.ismissing:
                 continue
 
-            parent_folder, was_created = find_or_create_parent_folder(on_disk=on_disk, photo=photo)
+            parent_folder, was_created = find_or_create_parent_folder(
+                on_disk=on_disk, photo=photo, base_dir=self.base_dir
+            )
             if was_created:
                 # Update the on_disk hierarchy to reflect the new source_folder
                 parent_or_parent = node_tools.get_folder(
@@ -125,14 +129,16 @@ class ImportIPhoneImages(DiskOptimization):
                     path_to_check.unlink()
 
 
-def find_or_create_parent_folder(on_disk: models.RootFolder, photo: osxphotos.PhotoInfo) -> tuple[models.Folder, bool]:
+def find_or_create_parent_folder(
+    on_disk: models.RootFolder, photo: osxphotos.PhotoInfo, base_dir: pathlib.Path
+) -> tuple[models.Folder, bool]:
     # The target_parent source_folder is simply the year taken
     parent_folder_relative_path = on_disk.relative_path.joinpath(str(photo.date.date().year))
 
     parent_folder = node_tools.get_folder(root_folder=on_disk, relative_path=parent_folder_relative_path)
 
     if parent_folder is None:
-        disk_path = node_tools.to_disk_path(parent_folder_relative_path)
+        disk_path = node_tools.to_disk_path(base_dir, parent_folder_relative_path)
 
         parent_folder = models.Folder(
             relative_path=parent_folder_relative_path,

@@ -1,10 +1,9 @@
 import asyncio
+import collections.abc
+import contextlib
 import logging
 import pathlib
-from collections.abc import Generator, Iterable
-from contextlib import asynccontextmanager
-from pathlib import Path
-from types import MappingProxyType
+import types
 
 from sync2smugmug import configuration, disk, models, protocols
 from sync2smugmug.online import smugmug
@@ -33,13 +32,13 @@ class OnlineConnection:
 
     async def iter_album_images(
         self, album: protocols.OnlineAlbumInfoShape
-    ) -> Generator[protocols.OnlineImageInfoShape, None, None]:
+    ) -> collections.abc.AsyncGenerator[protocols.OnlineImageInfoShape]:
         async for record in self._conn.paginate(relative_uri=album.images_uri, object_name="AlbumImage"):
             yield smugmug.SmugmugImage(record)
 
     async def iter_sub_folders(
         self, folder: protocols.OnlineFolderInfoShape
-    ) -> Generator[protocols.OnlineFolderInfoShape, None, None]:
+    ) -> collections.abc.AsyncGenerator[protocols.OnlineFolderInfoShape]:
         if folder.sub_folders_uri is None:
             return
 
@@ -48,7 +47,7 @@ class OnlineConnection:
 
     async def iter_albums(
         self, folder: protocols.OnlineFolderInfoShape
-    ) -> Generator[protocols.OnlineAlbumInfoShape, None, None]:
+    ) -> collections.abc.AsyncGenerator[protocols.OnlineAlbumInfoShape]:
         if folder.albums_uri is None:
             return
 
@@ -75,7 +74,7 @@ class OnlineConnection:
         )
 
         # Construct with a read-only version of the record
-        return smugmug.SmugmugFolder(MappingProxyType(r["Folder"]))  # noqa
+        return smugmug.SmugmugFolder(types.MappingProxyType(r["Folder"]))  # noqa
 
     async def create_album_online_info(
         self, parent: models.Folder, album_name: str, dry_run: bool
@@ -120,7 +119,9 @@ class OnlineConnection:
 
         return smugmug.SmugmugAlbum(r["Album"])  # noqa
 
-    async def download_images(self, images: Iterable[protocols.OnlineImageInfoShape], to_folder: Path, dry_run: bool):
+    async def download_images(
+        self, images: collections.abc.Iterable[protocols.OnlineImageInfoShape], to_folder: pathlib.Path, dry_run: bool
+    ):
         """
         Download missing images from the album on smugmug to the disk
 
@@ -152,7 +153,7 @@ class OnlineConnection:
             # The archived version holds the original copy of the photo (but not for videos)
             return image.record["ArchivedUri"]
 
-    async def upload_images(self, image_paths: list[Path], to_album_uri: str, dry_run: bool):
+    async def upload_images(self, image_paths: list[pathlib.Path], to_album_uri: str, dry_run: bool):
         """
         Download missing images from the album on smugmug to the disk
 
@@ -178,8 +179,10 @@ class OnlineConnection:
         return True
 
 
-@asynccontextmanager
-async def connect(connection_params: configuration.ConnectionParams) -> Generator[OnlineConnection, None, None]:
+@contextlib.asynccontextmanager
+async def connect(
+    connection_params: configuration.ConnectionParams,
+) -> collections.abc.AsyncGenerator[OnlineConnection]:
     """Context manager for creating a smugmug connection"""
 
     core_connection = smugmug.SmugmugCoreConnection(connection_params)

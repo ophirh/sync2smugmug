@@ -4,7 +4,6 @@ import datetime
 import pathlib
 
 from sync2smugmug import models
-from sync2smugmug.configuration import config
 
 
 def dir_is_empty_of_pictures(disk_path: pathlib.Path) -> bool:
@@ -16,8 +15,8 @@ def dir_is_empty_of_pictures(disk_path: pathlib.Path) -> bool:
     return has_only_metadata_files
 
 
-def to_disk_path(relative_path: pathlib.PurePath) -> pathlib.Path:
-    return config.base_dir.joinpath(relative_path)
+def to_disk_path(base_dir: pathlib.Path, relative_path: pathlib.PurePath) -> pathlib.Path:
+    return base_dir.joinpath(relative_path)
 
 
 def index_albums_by_dates(root_folder: models.RootFolder) -> dict[datetime.date, list[models.Album]]:

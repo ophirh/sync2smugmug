@@ -1,6 +1,6 @@
+import collections.abc
 import logging
-from collections.abc import Generator
-from pathlib import Path, PurePath
+import pathlib
 
 from sync2smugmug import disk, models
 from sync2smugmug.utils import general_tools, image_tools
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 @general_tools.timeit
-async def scan(base_dir: Path) -> models.RootFolder:
+async def scan(base_dir: pathlib.Path) -> models.RootFolder:
     """
     Discover hierarchy of folders and albums on disk
 
@@ -21,11 +21,11 @@ async def scan(base_dir: Path) -> models.RootFolder:
 
     # Keep a lookup table to be able to get the node (by path) for quick access during the os.walk
     # Parents will always be created before children, so we can assume that a lookup will be successful
-    folders: dict[PurePath, models.Folder] = dict()
+    folders: dict[pathlib.PurePath, models.Folder] = {}
     folders[root.relative_path] = root
 
     for dir_path in iter_directories(base_dir):
-        dir_relative_path = PurePath(dir_path.relative_to(base_dir))
+        dir_relative_path = pathlib.PurePath(dir_path.relative_to(base_dir))
         parent_relative_path = dir_relative_path.parent
 
         parent_folder = folders.get(parent_relative_path)
@@ -69,7 +69,7 @@ async def scan(base_dir: Path) -> models.RootFolder:
     return root
 
 
-def _should_skip(entry: Path) -> bool:
+def _should_skip(entry: pathlib.Path) -> bool:
     """
     Figures out which folders should be skipped (special folders that are not meant for upload)
 
@@ -90,7 +90,7 @@ def _should_skip(entry: Path) -> bool:
     return False
 
 
-def iter_directories(root_dir: Path) -> Generator[Path, None, None]:
+def iter_directories(root_dir: pathlib.Path) -> collections.abc.Generator[pathlib.Path]:
     """
     Recursively yield Path objects for given directory (DFS).
     """
@@ -105,9 +105,9 @@ def iter_directories(root_dir: Path) -> Generator[Path, None, None]:
         yield from iter_directories(entry)  # see below for Python 2.x
 
 
-def has_images(dir_path: Path) -> bool:
-    return any(image_tools.is_image(PurePath(e.name)) for e in dir_path.iterdir() if e.is_file())
+def has_images(dir_path: pathlib.Path) -> bool:
+    return any(image_tools.is_image(pathlib.PurePath(e.name)) for e in dir_path.iterdir() if e.is_file())
 
 
-def has_sub_folders(dir_path: Path) -> bool:
+def has_sub_folders(dir_path: pathlib.Path) -> bool:
     return any(e.is_dir() for e in dir_path.iterdir())

@@ -9,6 +9,7 @@ uv sync
 
 # Run ruff check and format
 echo "Running ruff check..."
+uv run ruff format
 uv run ruff check src/ --fix
 
 echo "Running ruff format..."

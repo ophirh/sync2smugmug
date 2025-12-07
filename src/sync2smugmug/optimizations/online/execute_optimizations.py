@@ -1,20 +1,23 @@
 import logging
+import pathlib
 from collections.abc import Iterable
 
 from sync2smugmug import models
-from sync2smugmug.configuration import config
 from sync2smugmug.online import online
-from sync2smugmug.optimizations.online import OnlineOptimization, cleanup, duplicates
 from sync2smugmug.scan import online_scanner
+
+from .base import OnlineOptimization
+from .cleanup import DeleteEmptyAlbums
+from .duplicates import RemoveOnlineImageDuplicates
 
 logger = logging.getLogger(__name__)
 
 
-async def run_online_optimizations(connection: online.OnlineConnection, dry_run: bool):
+async def run_online_optimizations(connection: online.OnlineConnection, base_dir: pathlib.Path, dry_run: bool):
     # List all the optimizations currently available (order matters)
     optimizations: Iterable[OnlineOptimization] = (
-        cleanup.DeleteEmptyAlbums(config.base_dir),
-        duplicates.RemoveOnlineImageDuplicates(config.base_dir),
+        DeleteEmptyAlbums(base_dir),
+        RemoveOnlineImageDuplicates(base_dir),
         # Add more optimizations here...
         # TODO: Scan for online nodes with "Processing" = True (these are bad) - and delete
     )

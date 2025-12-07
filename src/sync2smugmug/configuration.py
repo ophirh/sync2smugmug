@@ -3,8 +3,6 @@ import logging
 import pathlib
 import sys
 
-import configargparse
-
 from sync2smugmug import policy
 
 
@@ -33,62 +31,9 @@ class Config:
     base_dir: pathlib.Path
     force_refresh: bool
     dry_run: bool
-    mac_photos_library_location: pathlib.Path = None
+    mac_photos_library_location: pathlib.Path | None = None
 
 
-def get_config_files() -> list[pathlib.Path]:
-    """
-    Resolve a list of config file paths to be read (in that order) into the Configuration object
-    """
-    config_files_dir_path = pathlib.Path(__file__).parent.parent.resolve()
-    return [
-        config_files_dir_path.joinpath(config_file_name)
-        for config_file_name in ("sync2smugmug.conf", "sync2smugmug.my.conf")
-    ]
-
-
-def parse_command_line() -> configargparse.Namespace:
-    """
-    Define the command line parser and load configuration files into it
-    """
-    arg_parser = configargparse.ArgParser(default_config_files=get_config_files())
-
-    arg_parser.add_argument(
-        "--sync",
-        required=True,
-        help="Type of sync to perform (choose one of the available presets)",
-        choices=policy.get_presets(),
-    )
-    arg_parser.add_argument("--base_dir", required=True, help="Full path to pictures source_folder")
-    arg_parser.add_argument(
-        "--mac_photos_library_location",
-        required=False,
-        help="Full path for Mac Photos library",
-    )
-    arg_parser.add_argument("--account", required=True, help="Name (nickname) of SmugMug account")
-    arg_parser.add_argument("--consumer_key", required=True, help="Smugmug API key of this account")
-    arg_parser.add_argument("--consumer_secret", required=True, help="Smugmug API secret of this account")
-    arg_parser.add_argument(
-        "--access_token",
-        required=True,
-        help="Smugmug oauth token obtained for this script",
-    )
-    arg_parser.add_argument(
-        "--access_token_secret",
-        required=True,
-        help="Smugmug oauth secret obtained for this script",
-    )
-    arg_parser.add_argument("--force_refresh", action="store_true", default=False)
-    arg_parser.add_argument("--dry_run", action="store_true", default=False)
-    arg_parser.add_argument("--test_upload", action="store_true", default=False)
-    arg_parser.add_argument(
-        "--log_level",
-        required=False,
-        choices=["CRITICAL", "DEBUG", "ERROR", "FATAL", "INFO"],
-        default="INFO",
-    )
-
-    return arg_parser.parse_args()
 
 
 def configure_logging(log_level: str):
@@ -119,40 +64,47 @@ def configure_logging(log_level: str):
     logging.getLogger("osxphotos").setLevel(logging.WARNING)
 
 
-def make_config() -> Config:
-    args = parse_command_line()
+def make_config(
+    sync: str,
+    base_dir: pathlib.Path,
+    account: str,
+    consumer_key: str,
+    consumer_secret: str,
+    access_token: str,
+    access_token_secret: str,
+    mac_photos_library_location: pathlib.Path | None = None,
+    force_refresh: bool = False,
+    dry_run: bool = False,
+    test_upload: bool = False,
+    log_level: str = "INFO",
+) -> Config:
+    """
+    Create a Config object from the provided parameters
+    """
+    configure_logging(log_level)
 
-    configure_logging(args.log_level)
-
-    base_dir = pathlib.Path(args.base_dir).expanduser()
     assert base_dir.exists(), f"Base dir {base_dir} does not exist!"
 
-    preset_method = getattr(policy.SyncActionPresets, args.sync)
+    preset_method = getattr(policy.SyncActionPresets, sync)
     sync_preset = preset_method()
 
-    if args.mac_photos_library_location:
-        mac_photos_library_location = pathlib.Path(args.mac_photos_library_location).expanduser()
+    if mac_photos_library_location:
         assert mac_photos_library_location.exists(), (
             f"Mac photos library dir {mac_photos_library_location} does not exist!"
         )
-    else:
-        mac_photos_library_location = None
 
     return Config(
         sync=sync_preset,
         connection_params=ConnectionParams(
-            account=args.account,
-            consumer_key=args.consumer_key,
-            consumer_secret=args.consumer_secret,
-            access_token=args.access_token,
-            access_token_secret=args.access_token_secret,
-            test_upload=args.test_upload,
+            account=account,
+            consumer_key=consumer_key,
+            consumer_secret=consumer_secret,
+            access_token=access_token,
+            access_token_secret=access_token_secret,
+            test_upload=test_upload,
         ),
         base_dir=base_dir,
-        force_refresh=args.force_refresh,
-        dry_run=args.dry_run,
+        force_refresh=force_refresh,
+        dry_run=dry_run,
         mac_photos_library_location=mac_photos_library_location,
     )
-
-
-config: Config = make_config()

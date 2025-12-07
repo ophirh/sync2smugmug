@@ -1,7 +1,6 @@
 import logging
 
 from sync2smugmug import disk, event_manager, events, models, policy
-from sync2smugmug.configuration import config
 from sync2smugmug.online import online
 from sync2smugmug.utils import image_tools
 
@@ -16,6 +15,7 @@ async def synchronize(
     sync_action: policy.SyncAction,
     connection: online.OnlineConnection,
     dry_run: bool,
+    force_refresh: bool = False,
 ):
     """
     Synchronizes the two scanned view (download and/or upload)
@@ -40,6 +40,7 @@ async def synchronize(
             sync_action=sync_action,
             connection=connection,
             dry_run=dry_run,
+            force_refresh=force_refresh,
         )
 
     # Wait until all events are processed, so we are sure everything is done before we return
@@ -56,6 +57,7 @@ async def synchronize_folders(
     sync_action: policy.SyncAction,
     connection: online.OnlineConnection,
     dry_run: bool,
+    force_refresh: bool = False,
 ):
     """
     Recursively sync the directory structure from source_folder (and children) into target_folder (and children).
@@ -104,6 +106,7 @@ async def synchronize_folders(
                     sync_action=sync_action,
                     connection=connection,
                     dry_run=dry_run,
+                    force_refresh=force_refresh,
                 )
 
         # Now, recursively process sub folders
@@ -120,6 +123,7 @@ async def synchronize_folders(
                 sync_action=sync_action,
                 connection=connection,
                 dry_run=dry_run,
+                force_refresh=force_refresh,
             )
 
         if event_group.delete_permitted(sync_action):
@@ -160,6 +164,7 @@ async def synchronize_albums(
     sync_action: policy.SyncAction,
     connection: online.OnlineConnection,
     dry_run: bool,
+    force_refresh: bool = False,
 ):
     """
     Given both disk and online version of the album exist, we need to go down to the level of images.
@@ -190,7 +195,7 @@ async def synchronize_albums(
 
     # Check if node changed (will check last update date, meta-data, etc...)
     content_is_the_same, it_was_quick = await compare_disk_and_online_albums(
-        disk_album=disk_album, online_album=online_album, connection=connection
+        disk_album=disk_album, online_album=online_album, connection=connection, force_refresh=force_refresh
     )
 
     if not content_is_the_same:
@@ -251,6 +256,7 @@ async def compare_disk_and_online_albums(
     disk_album: models.Album,
     online_album: models.Album,
     connection: online.OnlineConnection,
+    force_refresh: bool = False,
 ) -> tuple[bool, bool]:
     """
     Perform a smart comparison between an online album and a disk album. This will take into account the last sync
@@ -265,7 +271,7 @@ async def compare_disk_and_online_albums(
     assert disk_album.is_on_disk and online_album.is_online
 
     # Use sync_data to see if we can shortcut the entire comparison
-    if albums_already_synced(disk_album, online_album):
+    if albums_already_synced(disk_album, online_album, force_refresh):
         return True, True
 
     if disk_album.relative_path != online_album.relative_path:
@@ -294,13 +300,13 @@ async def compare_disk_and_online_albums(
     return True, False
 
 
-def albums_already_synced(disk_album: models.Album, online_album: models.Album) -> bool:
+def albums_already_synced(disk_album: models.Album, online_album: models.Album, force_refresh: bool = False) -> bool:
     disk_info = disk_album.disk_info
     online_info = online_album.online_info
 
     assert disk_info is not None and online_info is not None
 
-    if config.force_refresh:
+    if force_refresh:
         # In this case, we are specifically asked to reload everything
         return False
 

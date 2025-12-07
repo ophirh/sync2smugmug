@@ -3,8 +3,9 @@ import shutil
 from pathlib import Path
 
 from sync2smugmug import models
-from sync2smugmug.optimizations.disk import DiskOptimization
 from sync2smugmug.utils import general_tools, node_tools
+
+from .base import DiskOptimization
 
 logger = logging.getLogger(__name__)
 

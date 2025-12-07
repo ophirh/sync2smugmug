@@ -7,7 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "Authlib>=1.2.1",
     "aioretry>=5.0.2",
-    "ConfigArgParse>=1.7",
     "httpx>=0.25.1",
     "osxphotos>=0.64.3",
     "Pillow>=10.1.0",
@@ -15,10 +14,11 @@ dependencies = [
     "python-dateutil>=2.8.2",
     "rauth>=0.7.3",
     "requests>=2.31.0",
+    "typer>=0.12.0",
 ]
 
 [project.scripts]
-sync2smugmug = "sync2smugmug.__main__:main"
+sync2smugmug = "sync2smugmug.__main__:app"
 
 [build-system]
 requires = ["hatchling"]

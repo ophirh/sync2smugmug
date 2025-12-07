@@ -3,8 +3,9 @@ from collections import defaultdict
 from datetime import datetime
 
 from sync2smugmug import disk, models
-from sync2smugmug.optimizations.disk import DiskOptimization
 from sync2smugmug.utils import general_tools, image_tools, node_tools
+
+from .base import DiskOptimization
 
 logger = logging.getLogger(__name__)
 

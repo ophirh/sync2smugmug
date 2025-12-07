@@ -1,9 +1,9 @@
+import contextlib
+import datetime
+import functools
 import logging
-from contextlib import closing
-from datetime import datetime
-from functools import lru_cache
-from pathlib import Path, PurePath
-from typing import Any
+import pathlib
+import typing
 
 import PIL.ExifTags
 import PIL.Image
@@ -13,7 +13,7 @@ from sync2smugmug import models
 logger = logging.getLogger(__name__)
 
 
-def is_image(filename: PurePath) -> bool:
+def is_image(filename: pathlib.PurePath) -> bool:
     return filename.suffix.lower() in models.supported_image_types
 
 
@@ -22,8 +22,8 @@ def images_are_the_same(image1: models.Image, image2: models.Image) -> bool:
     return image1.relative_path == image2.relative_path
 
 
-@lru_cache(maxsize=128)
-def extract_metadata(disk_path: Path, image_type: models.ImageType) -> dict[str, Any]:
+@functools.lru_cache(maxsize=128)
+def extract_metadata(disk_path: pathlib.Path, image_type: models.ImageType) -> dict[str, typing.Any]:
     """
     Convert Image EXIF data into a dictionary
     """
@@ -32,7 +32,7 @@ def extract_metadata(disk_path: Path, image_type: models.ImageType) -> dict[str,
     if not image_type.is_movie:
         try:
             # Extract vendor, model from metadata
-            with closing(PIL.Image.open(disk_path)) as pil_image:
+            with contextlib.closing(PIL.Image.open(disk_path)) as pil_image:
                 exif_data = pil_image.getexif()
 
                 for tag_id in exif_data:
@@ -56,7 +56,7 @@ def extract_metadata(disk_path: Path, image_type: models.ImageType) -> dict[str,
     return metadata
 
 
-def extract_image_time_taken(disk_path: Path, image_type: models.ImageType) -> datetime | None:
+def extract_image_time_taken(disk_path: pathlib.Path, image_type: models.ImageType) -> datetime.datetime | None:
     metadata = extract_metadata(disk_path, image_type)
     if metadata is None:
         return None
@@ -67,14 +67,14 @@ def extract_image_time_taken(disk_path: Path, image_type: models.ImageType) -> d
 
     try:
         # Parse the date!
-        return datetime.strptime(datetime_str, "%Y:%m:%d %H:%M:%S")
+        return datetime.datetime.strptime(datetime_str, "%Y:%m:%d %H:%M:%S")
     except ValueError:
         if logger.isEnabledFor(logging.DEBUG):
             logger.exception(f"Failed to parse date for {disk_path}")
         return None
 
 
-def extract_image_camera_make(disk_path: Path, image_type: models.ImageType) -> str | None:
+def extract_image_camera_make(disk_path: pathlib.Path, image_type: models.ImageType) -> str | None:
     metadata = extract_metadata(disk_path, image_type)
     if metadata is None:
         return None
@@ -82,7 +82,7 @@ def extract_image_camera_make(disk_path: Path, image_type: models.ImageType) -> 
     return metadata.get("Make")
 
 
-def extract_image_camera_model(disk_path: Path, image_type: models.ImageType) -> str | None:
+def extract_image_camera_model(disk_path: pathlib.Path, image_type: models.ImageType) -> str | None:
     metadata = extract_metadata(disk_path, image_type)
     if metadata is None:
         return None
@@ -90,7 +90,7 @@ def extract_image_camera_model(disk_path: Path, image_type: models.ImageType) ->
     return metadata.get("Model")
 
 
-def convert_to_jpeg(image_disk_path: Path, dry_run: bool) -> bool:
+def convert_to_jpeg(image_disk_path: pathlib.Path, dry_run: bool) -> bool:
     # TODO: Convert the underlying image to JPEG
     logger.info(f"Converting {image_disk_path} (dry_run={dry_run})")
     return False
