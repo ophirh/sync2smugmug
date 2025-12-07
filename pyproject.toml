@@ -1,0 +1,52 @@
+[project]
+name = "sync2smugmug"
+version = "0.1.0"
+description = "Synchronize an image repository on disk with an account on SmugMug"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "Authlib>=1.2.1",
+    "aioretry>=5.0.2",
+    "ConfigArgParse>=1.7",
+    "httpx>=0.25.1",
+    "osxphotos>=0.64.3",
+    "Pillow>=10.1.0",
+    "pillow-heif>=0.13.1",
+    "python-dateutil>=2.8.2",
+    "rauth>=0.7.3",
+    "requests>=2.31.0",
+]
+
+[project.scripts]
+sync2smugmug = "sync2smugmug.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sync2smugmug"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8.0",
+    "pytest>=8.0.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
