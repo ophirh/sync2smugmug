@@ -1,7 +1,7 @@
 import dataclasses
 import logging
 import sys
-from pathlib import Path
+import pathlib
 from typing import List
 
 import configargparse
@@ -29,17 +29,17 @@ class Config:
     """
     sync: policy.SyncAction
     connection_params: ConnectionParams
-    base_dir: Path
+    base_dir: pathlib.Path
     force_refresh: bool
     dry_run: bool
-    mac_photos_library_location: Path = None
+    mac_photos_library_location: pathlib.Path = None
 
 
-def get_config_files() -> List[Path]:
+def get_config_files() -> List[pathlib.Path]:
     """
     Resolve a list of config file paths to be read (in that order) into the Configuration object
     """
-    config_files_dir_path = Path(__file__).parent.parent.resolve()
+    config_files_dir_path = pathlib.Path(__file__).parent.parent.resolve()
     return [
         config_files_dir_path.joinpath(config_file_name)
         for config_file_name in ("sync2smugmug.conf", "sync2smugmug.my.conf")
@@ -150,14 +150,14 @@ def make_config() -> Config:
 
     configure_logging(args.log_level)
 
-    base_dir = Path(args.base_dir).expanduser()
+    base_dir = pathlib.Path(args.base_dir).expanduser()
     assert base_dir.exists(), f"Base dir {base_dir} does not exist!"
 
     preset_method = getattr(policy.SyncActionPresets, args.sync)
     sync_preset = preset_method()
 
     if args.mac_photos_library_location:
-        mac_photos_library_location = Path(args.mac_photos_library_location).expanduser()
+        mac_photos_library_location = pathlib.Path(args.mac_photos_library_location).expanduser()
         assert mac_photos_library_location.exists(), \
             f"Mac photos library dir {mac_photos_library_location} does not exist!"
     else:

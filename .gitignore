@@ -1,45 +1,15 @@
 # Ignore private config file
 *.my.conf
 
-.idea/
 *.ipynb
 __pycache__/
 *.py[cod]
-*.so
-.Python
-share/
-include/
-env/
-venv/
-bin/
-build/
-develop-eggs/
-dist/
-eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-pip-selfcheck.json
+.venv/
 
-# Unit test / coverage reports
-.tox/
-.coverage
-.cache
-nosetests.xml
-coverage.xml
+.ruff_cache/
 
-# Django stuff:
-*.log
-*.pot
 
-# Sphinx documentation
-docs/_build/
+
+
+.DS_Store

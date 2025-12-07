@@ -1,17 +1,17 @@
 import asyncio
 import calendar
+import concurrent.futures
+import collections.abc
 import dataclasses
+import datetime
 import hashlib
 import logging
-from concurrent import futures
-from datetime import datetime
-from pathlib import Path
-from typing import List, Union, Dict, Generator, AsyncIterator, ClassVar
+import pathlib
+import typing
 
 import aioretry
 from authlib.integrations import httpx_client, requests_client
 import httpx
-import requests
 
 from sync2smugmug import configuration
 
@@ -22,7 +22,7 @@ def retry_policy(info: aioretry.RetryInfo) -> aioretry.RetryPolicyStrategy:
     """
     Retry policy for connection issues
     """
-    if isinstance(info.exception, (httpx.TransportError, requests.ConnectionError)):
+    if isinstance(info.exception, httpx.TransportError):
         if info.fails < 3:
             logger.warning(f"Connection failed ({info.exception})! retrying...")
             return False, info.fails * 1.0
@@ -53,7 +53,7 @@ class SmugmugCoreConnection:
 
         # Session objects
         self._async_session: httpx_client.AsyncOAuth1Client | None = None
-        self._session: requests.Session | None = None
+        self._sync_session: httpx.Client | None = None
 
         self._threadpool = None
 
@@ -81,7 +81,7 @@ class SmugmugCoreConnection:
         )
 
         # Also create a sync client (because some of the Smugmug APIs do not work with the async client)
-        self._session = requests_client.OAuth1Session(
+        self._sync_session = requests_client.OAuth1Session(
             self._connection_params.consumer_key,
             self._connection_params.consumer_secret,
             token=self._connection_params.access_token,
@@ -94,16 +94,16 @@ class SmugmugCoreConnection:
         self._root_folder_uri = self._user["Uris"]["Folder"]["Uri"]
         self._test_root_folder_uri = f"{self._root_folder_uri}/Test"
 
-        self._threadpool = futures.ThreadPoolExecutor(thread_name_prefix="uploader")
+        self._threadpool = concurrent.futures.ThreadPoolExecutor(thread_name_prefix="uploader")
 
     async def disconnect(self):
         if self._async_session is not None:
             await self._async_session.aclose()
             self._async_session = None
 
-        if self._session is not None:
-            self._session.close()
-            self._session = None
+        if self._sync_session is not None:
+            self._sync_session.close()
+            self._sync_session = None
 
         if self._threadpool is not None:
             self._threadpool.shutdown(wait=True)
@@ -124,24 +124,24 @@ class SmugmugCoreConnection:
             logger.exception(f"Failed request: {method}, Url: {url}, args: {args}, kwargs: {kwargs}")
             raise e
 
-    async def request_get(self, relative_uri: str, *args, **kwargs) -> Dict:
+    async def request_get(self, relative_uri: str, *args, **kwargs) -> dict:
         r = await self._request("GET", self._format_url(relative_uri), *args, **kwargs)
         return r.json()["Response"]
 
-    async def request_post(self, relative_uri: str, json_data: Union[Dict, List], *args, **kwargs) -> Dict:
+    async def request_post(self, relative_uri: str, json_data: dict|list, *args, **kwargs) -> dict:
         """
         Posts data.
 
         For some (currently unknown) reason, the async version of the post consistently returns 400,
         where the sync version works.
         """
-        assert self._session is not None, "Call connect first!"
+        assert self._sync_session is not None, "Call connect first!"
 
         if "headers" not in kwargs:
             kwargs["headers"] = self._headers
 
         def sync_post() -> httpx.Response:
-            return self._session.post(
+            return self._sync_session.post(
                 self._format_url(relative_uri), *args, json=json_data, **kwargs
             )
 
@@ -152,7 +152,7 @@ class SmugmugCoreConnection:
 
             return r.json()["Response"]
 
-        except requests.HTTPError as e:
+        except httpx.HTTPError as e:
             logger.exception(f"Failed to post to {relative_uri} ({str(json_data)}) - {str(e)}")
 
             raise e
@@ -160,7 +160,7 @@ class SmugmugCoreConnection:
     async def request_delete(self, relative_uri: str):
         await self._request("DELETE", self._format_url(relative_uri))
 
-    async def request_stream(self, absolute_uri: str) -> AsyncIterator[bytes]:
+    async def request_stream(self, absolute_uri: str) -> collections.abc.AsyncIterator[bytes]:
         assert self._async_session is not None, "Call connect first!"
 
         async with self._async_session.stream(method="GET", url=absolute_uri, timeout=self.TIMEOUT) as r:
@@ -172,12 +172,12 @@ class SmugmugCoreConnection:
     async def request_upload(
             self,
             album_uri: str,
-            image_path: Path,
+            image_path: pathlib.Path,
             image_name: str,
             dry_run: bool,
             image_to_replace_uri: str = None,
     ):
-        assert self._async_session is not None and self._session is not None, "Call connect first!"
+        assert self._async_session is not None and self._sync_session is not None, "Call connect first!"
 
         if dry_run:
             return
@@ -199,18 +199,14 @@ class SmugmugCoreConnection:
             headers["X-Smug-ImageUri"] = image_to_replace_uri
 
         def sync_post() -> httpx.Response:
-            return self._session.post(
+            return self._sync_session.post(
                 "https://upload.smugmug.com/",
                 files={image_name: image_data},
                 headers=headers,
             )
 
         # Run sync version in a threadpool instead (async version does not work)
-        r = await asyncio.get_running_loop().run_in_executor(
-            self._threadpool,
-            sync_post
-        )
-
+        r = await asyncio.get_running_loop().run_in_executor(self._threadpool, sync_post)
         r.raise_for_status()
 
         response = r.json()
@@ -232,7 +228,7 @@ class SmugmugCoreConnection:
     def encode_uri_name(cls, name: str) -> str:
         return name.replace(" ", "-").replace(",", "").capitalize()
 
-    async def request_download(self, image_uri: str, local_path: Path):
+    async def request_download(self, image_uri: str, local_path: pathlib.Path):
         """
         Download a single image from the Album on Smugmug to a source_folder on disk
         """
@@ -253,7 +249,7 @@ class SmugmugCoreConnection:
             relative_uri: str,
             object_name: str,
             page_size: int = 100
-    ) -> Generator[Dict, None, None]:
+    ) -> collections.abc.AsyncGenerator[dict]:
         """
         Yield full list of items (through pagination)
         """
@@ -283,7 +279,7 @@ class SmugmugCoreConnection:
 
 @dataclasses.dataclass
 class SmugmugRecord:
-    record: Dict = dataclasses.field(repr=False)
+    record: dict = dataclasses.field(repr=False)
     name: str = dataclasses.field(init=False)
     uri: str = dataclasses.field(init=False)
 
@@ -320,7 +316,7 @@ class SmugmugFolder(SmugmugRecord):
 
 @dataclasses.dataclass
 class SmugmugAlbum(SmugmugRecord):
-    DATE_ALBUM_FORMAT: ClassVar[str] = "%Y-%m-%dT%H:%M:%S%z"  # data format of smugmug dates
+    DATE_ALBUM_FORMAT: typing.ClassVar[str] = "%Y-%m-%dT%H:%M:%S%z"  # data format of smugmug dates
 
     images_uri: str = dataclasses.field(init=False)
     image_count: int = dataclasses.field(init=False)
@@ -333,7 +329,7 @@ class SmugmugAlbum(SmugmugRecord):
         self.image_count = self.record["ImageCount"]
 
         # Return the epoch of the last update (for easier saving in a json file)
-        last_updated_date = datetime.strptime(self.record["LastUpdated"], self.DATE_ALBUM_FORMAT)
-        images_last_updated_date = datetime.strptime(self.record["ImagesLastUpdated"], self.DATE_ALBUM_FORMAT)
+        last_updated_date = datetime.datetime.strptime(self.record["LastUpdated"], self.DATE_ALBUM_FORMAT)
+        images_last_updated_date = datetime.datetime.strptime(self.record["ImagesLastUpdated"], self.DATE_ALBUM_FORMAT)
         maximum_date = max(last_updated_date, images_last_updated_date)
         self.last_updated = calendar.timegm(maximum_date.timetuple())
