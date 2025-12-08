@@ -1,9 +1,9 @@
 import asyncio
 import logging
-import pathlib
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
+from rich.console import Console
 
 # Import handlers module to register all handlers
 from sync2smugmug import (
@@ -18,13 +18,16 @@ from sync2smugmug.optimizations.online import execute_optimizations as online_op
 from sync2smugmug.scan import disk_scanner, online_scanner
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 app = typer.Typer(help="Synchronize an image repository on disk with an account on SmugMug")
 
 
 async def run_sync(config: Config):
-    """Execute the synchronization workflow"""
-    print(config)
+    """
+    Execute the synchronization workflow
+    """
+    console.print(config)
 
     sync_action = config.sync
 
@@ -34,7 +37,9 @@ async def run_sync(config: Config):
     async with online.connect(config.connection_params) as connection:
         if sync_action.optimize_online:
             await online_optimizations.run_online_optimizations(
-                connection=connection, base_dir=config.base_dir, dry_run=config.dry_run
+                connection=connection,
+                base_dir=config.base_dir,
+                dry_run=config.dry_run,
             )
 
         if sync_action.upload or sync_action.download:
@@ -58,29 +63,18 @@ async def run_sync(config: Config):
 
 @app.command()
 def main(
-    sync: Annotated[
-        str,
-        typer.Option(help="Type of sync to perform (choose one of the available presets)"),
-    ],
-    base_dir: Annotated[pathlib.Path, typer.Option(help="Full path to pictures source_folder")],
-    account: Annotated[str, typer.Option(help="Name (nickname) of SmugMug account")],
-    consumer_key: Annotated[str, typer.Option(help="Smugmug API key of this account")],
-    consumer_secret: Annotated[str, typer.Option(help="Smugmug API secret of this account")],
-    access_token: Annotated[str, typer.Option(help="Smugmug oauth token obtained for this script")],
-    access_token_secret: Annotated[str, typer.Option(help="Smugmug oauth secret obtained for this script")],
-    mac_photos_library_location: Annotated[
-        Optional[pathlib.Path], typer.Option(help="Full path for Mac Photos library")
-    ] = None,
+    sync: Annotated[str, typer.Option(help="Type of sync to perform (choose one of the available presets)")],
     force_refresh: Annotated[bool, typer.Option(help="Force refresh of cached data")] = False,
     dry_run: Annotated[bool, typer.Option(help="Perform a dry run without making changes")] = False,
     test_upload: Annotated[bool, typer.Option(help="Enable test upload mode")] = False,
-    log_level: Annotated[
-        str,
-        typer.Option(help="Set the logging level"),
-    ] = "INFO",
+    log_level: Annotated[str, typer.Option(help="Set the logging level")] = "INFO",
 ):
     """
-    Synchronize an image repository on disk with an account on SmugMug
+    Synchronize an image repository on disk with an account on SmugMug.
+
+    Configuration can be provided via command line options or config files.
+    Config files are loaded from: sync2smugmug.conf and sync2smugmug.my.conf
+    Command line options override config file values.
     """
     # Validate sync preset
     available_presets = policy.get_presets()
@@ -94,26 +88,18 @@ def main(
         typer.echo(f"Error: Invalid log level '{log_level}'. Valid levels: {', '.join(valid_log_levels)}")
         raise typer.Exit(code=1)
 
-    # Expand paths
-    base_dir = base_dir.expanduser()
-    if mac_photos_library_location:
-        mac_photos_library_location = mac_photos_library_location.expanduser()
+    try:
+        config = make_config(
+            sync=sync,
+            force_refresh=force_refresh,
+            dry_run=dry_run,
+            test_upload=test_upload,
+            log_level=log_level,
+        )
 
-    # Create configuration
-    config = make_config(
-        sync=sync,
-        base_dir=base_dir,
-        account=account,
-        consumer_key=consumer_key,
-        consumer_secret=consumer_secret,
-        access_token=access_token,
-        access_token_secret=access_token_secret,
-        mac_photos_library_location=mac_photos_library_location,
-        force_refresh=force_refresh,
-        dry_run=dry_run,
-        test_upload=test_upload,
-        log_level=log_level,
-    )
+    except ValueError as e:
+        typer.echo(f"Configuration error: {e}", err=True)
+        raise typer.Exit(code=1)
 
     # Run the async workflow
     asyncio.run(run_sync(config))

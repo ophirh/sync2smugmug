@@ -1366,6 +1366,7 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "rauth" },
     { name = "requests" },
+    { name = "rich" },
     { name = "typer" },
 ]
 
@@ -1386,6 +1387,7 @@ requires-dist = [
     { name = "python-dateutil", specifier = ">=2.8.2" },
     { name = "rauth", specifier = ">=0.7.3" },
     { name = "requests", specifier = ">=2.31.0" },
+    { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.12.0" },
 ]
 

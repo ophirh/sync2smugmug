@@ -8,5 +8,6 @@ __pycache__/
 .venv/
 .ruff_cache/
 .claude/
+.vscode/
 
 .DS_Store

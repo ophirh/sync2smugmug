@@ -1,10 +1,13 @@
 import logging
 
+from rich.console import Console
+
 from sync2smugmug import disk, event_manager, events, models, policy
 from sync2smugmug.online import online
 from sync2smugmug.utils import image_tools
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 DELTA = 360.0  # 360 seconds to allow between online and disk clocks
 
@@ -339,17 +342,17 @@ def print_summary(on_disk: models.RootFolder, on_smugmug: models.RootFolder):
 
     em = event_manager.the_events_tracker
 
-    print("")
-    print("Scan Results")
-    print("============")
+    console.print()
+    console.print("[bold]Scan Results[/bold]")
+    console.print("=" * 50)
 
-    print(f"On disk                : {on_disk.stats}")
-    print(f"Smugmug                : {on_smugmug.stats}")
-    print("Actions:")
+    console.print(f"On disk                : {on_disk.stats}")
+    console.print(f"Smugmug                : {on_smugmug.stats}")
+    console.print("[bold]Actions:[/bold]")
 
-    print(f"  {'Total': <21}:               : {em.total_processed} / {em.total_submitted}")
+    console.print(f"  {'Total': <21}:               : {em.total_processed} / {em.total_submitted}")
 
     for action_type, count in em.event_count_by_type.items():
-        print(f"  {action_type: <21}:               : {count}")
+        console.print(f"  {action_type: <21}:               : {count}")
 
-    print("")
+    console.print()
